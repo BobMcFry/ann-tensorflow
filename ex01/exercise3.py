@@ -159,7 +159,7 @@ def batches(data, targets, size):
 
 
 def train(data, targets, epochs=1000, learning_rate=0.1, bs=10,
-          W=np.array([[-2.5, -2.5]])):
+          W=np.array([[-2.5, -2.5]]), momentum=0.5):
     '''Train the network.
     Parameters
     ----------
@@ -175,6 +175,9 @@ def train(data, targets, epochs=1000, learning_rate=0.1, bs=10,
             Batch size
     W   :   np.ndarray
             Intitial weights of shape (1, 2)
+    momentum    :   float
+                    Momentum parameter
+
     Returns
     -------
     W   :   np.ndarray
@@ -190,6 +193,8 @@ def train(data, targets, epochs=1000, learning_rate=0.1, bs=10,
     # record all weight updates for later plotting
     all_Ws = np.zeros((n_iter, 2))
 
+    delta_w = np.zeros((1,2))
+
     for epoch in range(epochs):
         # one epoch means going over the entire dataset once
         for batch, batch_targets in batches(data, targets, bs):
@@ -199,7 +204,8 @@ def train(data, targets, epochs=1000, learning_rate=0.1, bs=10,
             gradient = gradient_loss(W, batch, batch_targets)
             # I don't know why I need the +-sign instead of minus, there seems
             # to be an error somewhere
-            W = W + learning_rate * gradient
+            delta_w = momentum * delta_w + learning_rate * gradient
+            W = W + delta_w
         # loss = loss_function(forward_pass(W, data), targets)
         # print('W={}, loss={}'.format(W, loss))
     return W, all_Ws
