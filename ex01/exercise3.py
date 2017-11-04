@@ -283,7 +283,7 @@ def main():
     #                             Generate targets                             #
     ##########################################################################
     data = np.concatenate((x_cat, x_dog), axis=0)
-    # 1 = Cat, 0 = Dog
+    # 1 = CAT, 0 = DOG
     targets_cats = np.ones((sample_size // 2, 1))
     targets_dogs = np.zeros((sample_size // 2, 1))
     targets = np.concatenate((targets_cats, targets_dogs), axis=0)
@@ -291,25 +291,34 @@ def main():
     ##########################################################################
     #                               Do training                                #
     ##########################################################################
-    f2 = generate_error_surf_plot(data, targets)
+    figure_surf = generate_error_surf_plot(data, targets)
     final_W, all_Ws = train(data, targets, epochs=1000, W=np.array([[-1, 4]]))
     print('Final weights and loss: {}, {}'.format(
         final_W, loss_function(forward_pass(final_W, data), targets)))
+    ############################################################################
+    #                  Create surface plot and show progress                   #
+    ############################################################################
+    # marker for final weights
     circle = plt.Circle(
         (final_W[0, 0], final_W[0, 1]), 0.2, color='r', alpha=0.2)
-    ax = f2.gca()
-    ax.set_title('Error surface and weight updates')
-    ax.add_artist(circle)
-    ax.scatter(all_Ws[:, 0], all_Ws[:, 1],
+    plot_surf = figure_surf.gca()
+    plot_surf.set_title('Error surface and weight updates')
+    # shapes are 'Artists' in pyplot speak
+    plot_surf.add_artist(circle)
+    # dots change color from black to white
+    plot_surf.scatter(all_Ws[:, 0], all_Ws[:, 1],
                c=np.linspace(0.0, 1.0, all_Ws.shape[0]),
                cmap='gray', s=0.5)
-    ax2 = f2.add_subplot(122)
+    ############################################################################
+    #                       Create a plot for the loss                         #
+    ############################################################################
+    plot_loss = figure_surf.add_subplot(122)
     all_losses = np.apply_along_axis(lambda W: loss_function(
         forward_pass(np.array([W]), data), targets), 1, all_Ws)
-    ax2.plot(np.arange(all_Ws.shape[0]), all_losses)
-    ax2.set_title('Loss across steps')
-    ax2.set_xlabel('iteration')
-    ax2.set_ylabel('loss')
+    plot_loss.plot(np.arange(all_Ws.shape[0]), all_losses)
+    plot_loss.set_title('Loss across steps')
+    plot_loss.set_xlabel('iteration')
+    plot_loss.set_ylabel('loss')
 
     plt.show()
 
