@@ -193,7 +193,7 @@ def train(data, targets, epochs=1000, learning_rate=0.1, bs=10,
     # record all weight updates for later plotting
     all_Ws = np.zeros((n_iter, 2))
 
-    delta_w = np.zeros((1,2))
+    delta_w = np.zeros((1, 2))
 
     for epoch in range(epochs):
         # one epoch means going over the entire dataset once
@@ -313,8 +313,8 @@ def main():
     plot_surf.add_artist(circle)
     # dots change color from black to white
     plot_surf.scatter(all_Ws[:, 0], all_Ws[:, 1],
-               c=np.linspace(0.0, 1.0, all_Ws.shape[0]),
-               cmap='gray', s=0.5)
+                      c=np.linspace(0.0, 1.0, all_Ws.shape[0]),
+                      cmap='gray', s=0.5)
     ############################################################################
     #                       Create a plot for the loss                         #
     ############################################################################
