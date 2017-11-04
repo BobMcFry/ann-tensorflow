@@ -231,12 +231,12 @@ def generate_error_surf_plot(data, targets, limits_x=(-4, 4), limits_y=(-4, 4)):
     delta = 0.05
     w1 = np.arange(limits_x[0], limits_x[1] + delta, delta)
     w2 = np.arange(limits_y[0], limits_y[1] + delta, delta)
-    Z = np.zeros((len(y), len(x)))
+    Z = np.zeros((len(w2), len(w1)))
     # now we fill the value array which has for each pair of w1, w2 the loss for
     # those weights
     for xi in np.arange(len(w1)):
         for yi in np.arange(len(w2)):
-            W = np.array([[x[xi], y[yi]]])
+            W = np.array([[w1[xi], w2[yi]]])
             Z[yi, xi] = loss_function(forward_pass(W, data), targets)
     cp = ax.contourf(w1, w2, Z)
     ax.set_xlim(limits_y)
