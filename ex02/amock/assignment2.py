@@ -6,27 +6,34 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 
 if __name__ == "__main__":
-    mnist_loader = MNIST("res")
+    mnist = input_data.read_data_sets('res', one_hot=True)
 
-    training_batch = mnist_loader.get_training_batch(1)
+    sess = tf.InteractiveSession()
+    x = tf.placeholder(tf.float32, shape=[None, 784])
+    y_ = tf.placeholder(tf.float32, shape=[None, 10])
 
-    num_trained = 0
+    W = tf.Variable(tf.zeros([784, 10]))
+    b = tf.Variable(tf.zeros([10]))
 
-    images = []
-    labels = []
+    sess.run(tf.global_variables_initializer())
 
-    num_train = 1
+    y = tf.matmul(x,W) + b
 
-    for (image, label) in training_batch:
-        images.append(np.squeeze(image, axis=0) )
-        labels.append(np.squeeze(label,axis=0) )
-        
-        num_trained = num_trained + 1
-        if(num_trained >= num_train):
-            break
 
-    for i,image in enumerate(images):
-        plt.imshow(image)
-        plt.title(str(labels[i]))
-        
-    plt.show()
+    cross_entropy = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y))
+
+    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+
+    for i in range(1000):
+        print(i)
+        batch = mnist.train.next_batch(100)
+        train_step.run(feed_dict={x: batch[0], y_: batch[1]})
+
+    correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+
+
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    print(accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
+
