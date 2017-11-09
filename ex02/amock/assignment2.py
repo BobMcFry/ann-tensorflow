@@ -68,5 +68,14 @@ if __name__ == "__main__":
                 
                 train_writer.add_summary(summary, e*i)
 
+        weights = W.eval()
+
     # show graphs with 'tensorboard --logdir=.' 
+    i = 0
+    weight = weights[:,i]
+    weight = weight.reshape((28,28))
+    print(weight)
+    plt.imshow(weight)
+    plt.title(str(i))
+    plt.show()
 
