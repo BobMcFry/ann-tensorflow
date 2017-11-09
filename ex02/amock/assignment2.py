@@ -5,35 +5,68 @@ import matplotlib.pyplot as plt
 from tensorflow.examples.tutorials.mnist import input_data
 
 
+mini_batch_size = 100
+num_mini_batches = 500
+num_epochs = 3
+
+FLAGS = dict()
+FLAGS['summaries_dir'] = './tmp/mnist'
+
 if __name__ == "__main__":
+    # Tensorflow mnist dataset handler
     mnist = input_data.read_data_sets('res', one_hot=True)
 
-    sess = tf.InteractiveSession()
+    # TENSORFLOW DEFINING NETWORK START
     x = tf.placeholder(tf.float32, shape=[None, 784])
+   
     y_ = tf.placeholder(tf.float32, shape=[None, 10])
 
-    W = tf.Variable(tf.zeros([784, 10]))
-    b = tf.Variable(tf.zeros([10]))
 
-    sess.run(tf.global_variables_initializer())
+    with tf.name_scope('layer'):
+        with tf.name_scope('weights'):
+            W = tf.Variable(tf.zeros([784, 10]))
+        with tf.name_scope('biases'):
+            b = tf.Variable(tf.zeros([10]))
+        with tf.name_scope('Wx_plus_b'):
+            y = tf.matmul(x,W) + b
+    
+    with tf.name_scope('cross_entropy'):
+        diff = tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y)
+        with tf.name_scope('total'):
+            cross_entropy = tf.reduce_mean(diff)
 
-    y = tf.matmul(x,W) + b
+    tf.summary.scalar('cross_entropy', cross_entropy)
+
+    with tf.name_scope('train'):
+        train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+
+    with tf.name_scope('accuracy'):
+        with tf.name_scope('correct_prediction'):
+            correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+        with tf.name_scope('accuracy'):
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    tf.summary.scalar('accuracy', accuracy)
+    merged = tf.summary.merge_all()
 
 
-    cross_entropy = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y))
+    # TENSORFLOW DEFINING NETWORK END
 
-    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+    # create mini batches
+    mini_batches = []
+    for i in range(num_mini_batches):
+        mini_batches.append(mnist.train.next_batch(mini_batch_size))
 
-    for i in range(1000):
-        print(i)
-        batch = mnist.train.next_batch(100)
-        train_step.run(feed_dict={x: batch[0], y_: batch[1]})
+    # training with mini batches, num_epochs times
+    with tf.Session() as sess:
+        train_writer = tf.summary.FileWriter(FLAGS['summaries_dir'] + '/train', sess.graph)
+        sess.run(tf.global_variables_initializer())
+        for e in range(num_epochs):
+            for i in range(num_mini_batches):
+                batch = mini_batches[i]
+                summary, acc = sess.run([merged, train_step], feed_dict={x: batch[0], y_: batch[1]})
+                
+                train_writer.add_summary(summary, e*i)
 
-    correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-
-
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-    print(accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
+    # show graphs with 'tensorboard --logdir=.' 
 
