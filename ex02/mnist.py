@@ -8,21 +8,23 @@ from gzip import GzipFile
 
 
 class MNISTLoader():
-    def __init__(self, directory=None, base_link='http://yann.lecun.com/exdb/mnist/'):
-        self.data_folder = 'data'
-        if not os.path.exists(self.data_folder):
-            os.mkdir(self.data_folder)
+    def __init__(self, directory='data', base_link='http://yann.lecun.com/exdb/mnist/'):
+
         self.training_data_name = 'train-images-idx3-ubyte.gz'
         self.training_labels_name = 'train-labels-idx1-ubyte.gz'
         self.test_data_name = 't10k-images-idx3-ubyte.gz'
         self.test_labels_name = 't10k-labels-idx1-ubyte.gz'
-        if not directory:
+
+        self.data_folder = directory
+
+        if not os.path.exists(self.data_folder):
+            os.mkdir(self.data_folder)
             self.test_data = self._load(
-                urljoin(base_link, self.test_data_name)
+                urljoin(base_link, self.test_data_name), False, True
             )
-            self.test_labels = self._load(urljoin(base_link, self.test_labels_name), True)
-            self.training_data = self._load(urljoin(base_link, self.training_data_name))
-            self.training_labels = self._load(urljoin(base_link, self.training_labels_name), True)
+            self.test_labels = self._load(urljoin(base_link, self.test_labels_name), True, True)
+            self.training_data = self._load(urljoin(base_link, self.training_data_name), False, True)
+            self.training_labels = self._load(urljoin(base_link, self.training_labels_name), True, True)
         else:
             self.test_data = self._load(os.path.join(directory, self.test_data_name))
             self.test_labels = self._load(os.path.join(directory,
@@ -31,7 +33,7 @@ class MNISTLoader():
             self.training_labels = self._load(os.path.join(directory,
                                                            self.training_labels_name), True)
 
-    def _load(self, path_or_url, labels=False):
+    def _load(self, path_or_url, labels=False, save=False):
 
         parse_result = urlparse(path_or_url)
         if not parse_result.scheme:
@@ -43,9 +45,10 @@ class MNISTLoader():
         with urlopen(path_or_url) as request_stream:
             zip_file = GzipFile(fileobj=request_stream, mode='rb')
             zip_name = os.path.join(self.data_folder, os.path.basename(path_or_url))
-            # first save the file
-            with gzip.open(zip_name, mode='wb') as f:
-                f.write(zip_file.read())
+            if save:
+                # first save the file
+                with gzip.open(zip_name, mode='wb') as f:
+                    f.write(zip_file.read())
             # then read it back in and fill data
             with gzip.open(zip_name, mode='rb') as fd:
                 magic, numberOfItems = struct.unpack('>ii', fd.read(8))
