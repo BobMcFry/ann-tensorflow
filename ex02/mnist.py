@@ -5,6 +5,7 @@ from urllib.parse import urlparse, urljoin
 import numpy as np
 import gzip
 from gzip import GzipFile
+np.random.seed(1)
 
 
 class MNISTLoader():
@@ -63,8 +64,21 @@ class MNISTLoader():
                     return images
                 else:
                     b = bytearray(fd.read())
-                    images = np.frombuffer(b, dtype='uint8')
+                    labels = np.frombuffer(b, dtype='uint8')
                     return labels
+
+    def batches(self, data, labels, batch_size):
+        samples_n = labels.shape[0]
+        if batch_size <= 0:
+            batch_size = samples_n
+
+        random_indices = np.random.choice(samples_n, samples_n, replace=False)
+        data = data[random_indices]
+        labels = labels[random_indices]
+        for i in range(samples_n // batch_size):
+            on = i * batch_size
+            off = on + batch_size
+            yield data[on:off], labels[on:off]
 
 
 if __name__ == '__main__':
