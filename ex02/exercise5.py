@@ -1,62 +1,148 @@
+from matplotlib import pyplot as plt
 import tensorflow as tf
+# truncated normal distribution discards values more than 2 stds off-mean
+from tensorflow import truncated_normal_initializer
 import numpy as np
 from mnist import MNISTLoader
 
-# load the data
-loader = MNISTLoader()
-d_train, l_train, d_test, l_test = (loader.training_data, loader.training_labels,
-        loader.test_data, loader.test_labels)
+def train(n_epochs=10, batch_size=50):
+    # load the data
+    loader = MNISTLoader()
+    d_train, l_train, d_test, l_test = (loader.training_data, loader.training_labels,
+            loader.test_data, loader.test_labels)
 
-d_test = np.reshape(d_test, (-1, 28 * 28))
-d_train = np.reshape(d_train, (-1, 28 * 28))
-l_test = l_test[:, np.newaxis]
-l_train = l_train[:, np.newaxis]
+    ################################################################################
+    #               The data comes in image format, which we flatten               #
+    ################################################################################
+    d_test  = np.reshape(d_test, (-1, 28 * 28))
+    d_train = np.reshape(d_train, (-1, 28 * 28))
+    ################################################################################
+    #        The labels only have 1 dimensions, we need to blow it up to 2         #
+    ################################################################################
+    l_test  = l_test[:, np.newaxis]
+    l_train = l_train[:, np.newaxis]
 
-batch_size = 1000
+    # Weight matrix
+    mean = 0.0
+    std = 0.000002
+    W = tf.get_variable('weights', initializer=truncated_normal_initializer(mean,
+        std, seed=1), shape=[28 * 28, 10])
 
-# Weight matrix
-W = tf.get_variable('weights', initializer=tf.random_normal_initializer(0.0,
-    0.000002, seed=1), shape=[28 * 28, 10])
+    # bias vector
+    b = tf.get_variable('bias', initializer=tf.zeros_initializer(), shape=[10])
 
-# bias vector
-b = tf.get_variable('bias', initializer=tf.zeros_initializer(), shape=[10])
+    # data vector
+    x = tf.placeholder(tf.float32, [None, 28 * 28], name='input')
 
-# data vector
-x = tf.placeholder(tf.float32, [None, 28 * 28], name='input')
+    # desired output (ie real labels)
+    d = tf.placeholder(tf.int32, [None, 1], name='labels')
+    # one-hot encoding produuces a vecor of shape (batch, 1, 10) instead of (batch, 10)
+    d_1_hot = tf.squeeze(tf.one_hot(d, 10), axis=1)
 
-# desired output (ie real labels)
-d = tf.placeholder(tf.int32, [None, 1], name='labels')
-d_1_hot = tf.squeeze(tf.one_hot(d, 10), axis=1)
+    # computed output of the network without activation
+    y = tf.matmul(x, W) + b
 
-# computed output of the network without activation
-y = tf.matmul(x, W) + b
+    # loss function
+    cross_entropy      = tf.nn.softmax_cross_entropy_with_logits(logits  = y, labels = d_1_hot)
+    mean_cross_entropy = tf.reduce_mean(cross_entropy)
+    optimizer          = tf.train.GradientDescentOptimizer(learning_rate=0.5)
+    training_step      = optimizer.minimize(cross_entropy)
 
-# loss function
-cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=d_1_hot)
-optimizer     = tf.train.GradientDescentOptimizer(learning_rate=0.5)
-training_step = optimizer.minimize(cross_entropy)
+    # check if neuron firing strongest coincides with max value position in real
+    # labels
+    correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(d_1_hot, 1))
+    accuracy           = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-# check if neuron firing strongest coincides with max value position in real
-# labels
-correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(d_1_hot, 1))
-accuracy           = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    # record accuracy
+    training_step_accuracy = []
+    test_step_accuracy     = []
 
-training_step_accuracy = []
+    # record cross-entropy
+    training_step_entropy = []
+    test_step_entropy     = []
 
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    print('Training')
-    n_epochs = 3
+    # record weights
+    weights = []
 
-    for _ in range(n_epochs):
-        for mb, labels in loader.batches(d_train, l_train, batch_size=batch_size):
-            sess.run(training_step, feed_dict={x: mb, d: labels})
-        current_accuracy = sess.run(accuracy, feed_dict={x: d_train, d: l_train})
-        print('Current accuracy: %f' % current_accuracy)
-        training_step_accuracy.append(current_accuracy)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        i = 0
+        for epoch in range(n_epochs):
+            print('Epoch %d' % epoch)
+            for mb, labels in loader.batches(d_train, l_train, batch_size):
+                values = sess.run({'weights': W, 'step': training_step}, feed_dict={x: mb, d: labels})
+                if i % 10 == 0:
+                    current_train_accuracy = sess.run(accuracy, feed_dict={x: d_train, d: l_train})
+                    current_test_accuracy = sess.run(accuracy, feed_dict={x: d_test, d: l_test})
+                    training_step_accuracy.append(current_train_accuracy)
+                    test_step_accuracy.append(current_test_accuracy)
 
-    print("Final test accuracy: %f" % sess.run(accuracy, feed_dict={x:
-        d_test, d: l_test}))
-    print("min/max training accuracy: %f/%f" %
-            (np.min(training_step_accuracy), np.max(training_step_accuracy)))
+                    current_train_entropy = sess.run(mean_cross_entropy, feed_dict={x: d_train, d: l_train})
+                    current_test_entropy = sess.run(mean_cross_entropy, feed_dict={x: d_test, d: l_test})
+                    training_step_entropy.append(current_train_entropy)
+                    test_step_entropy.append(current_test_entropy)
+
+                    weights.append(np.reshape(values['weights'], (28, 28, 10)))
+                i += 1
+
+
+    return (training_step_accuracy, test_step_accuracy, training_step_entropy,
+            test_step_entropy, weights)
+
+if __name__ == "__main__":
+    training_accuracy, test_accuracy, training_entropy, test_entropy, weights = train(3,
+            50)
+    # Problem: We append the accuray every 10th step, so we may miss the last
+    # one
+    print('(Almost) final test accuracy: %f' % test_accuracy[-1])
+    ############################################################################
+    #                         Plot entropy and accuray                         #
+    ############################################################################
+    f = plt.figure()
+    ax_acc = f.add_subplot(121)
+    ax_acc.set_title('Accuracy over training and test sets')
+    ax_acc.set_xlabel('(n*10)th batch')
+    ax_acc.set_ylabel('Accuracy')
+    ax_acc.plot(test_accuracy, linestyle=':', label='Test set')
+    ax_acc.plot(training_accuracy, linestyle=':', label='Training set')
+    ax_acc.legend()
+
+    ax_entropy = f.add_subplot(122)
+    ax_entropy.set_title('Cross Entropy over training and test sets')
+    ax_entropy.set_xlabel('(n*10)th batch')
+    ax_entropy.set_ylabel('Cross Entropy')
+    ax_entropy.plot(test_entropy, linestyle=':', label='Test set')
+    ax_entropy.plot(training_entropy, linestyle=':', label='Training set')
+    ax_entropy.legend()
+    plt.show()
+
+    ############################################################################
+    #                        Plot weights interactively                        #
+    ############################################################################
+    rows, cols = (2, 5)
+    f2, axarr = plt.subplots(rows, cols)
+    plt.ion()
+    for row in range(2):
+        for col in range(5):
+            ax = axarr[row][col]
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+    for i in range(len(weights)):
+        current_weights = weights[i]
+        for row in range(2):
+            for col in range(5):
+                f2.suptitle('Step %d of %d' % (i, len(weights)))
+                ax = axarr[row][col]
+                ax.cla()
+                index = row * rows + col
+                ax.set_title('Neuron %d' % index)
+                # there's many diverging cmaps
+                # (https://matplotlib.org/examples/color/colormaps_reference.html)
+                ax.imshow(current_weights[..., index], cmap='Spectral')
+
+        # pause so that it always takes 5 seconds
+        # Note: The animation seems to slow down linearly, unless we clear the
+        # axes (see above)
+        plt.pause(5 / len(weights))
+
 
