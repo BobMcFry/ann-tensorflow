@@ -192,4 +192,6 @@ if __name__ == "__main__":
         # pause so that it always takes 5 seconds
         # Note: The animation seems to slow down linearly, unless we clear the
         # axes (see above)
+        # NOTE: When using matplotlib==2.1.0, there seems to be a bug causing
+        # this to fail. Works with 2.0.2
         plt.pause(3 / len(weights))
