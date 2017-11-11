@@ -95,10 +95,10 @@ class MNISTLoader():
         parse_result = urlparse(path_or_url)
         if not parse_result.scheme:
             # looks like a file
-            path_or_url = 'file://' + os.path.abspath(path_or_url)
             if not os.path.exists(path_or_url):
-                raise RuntimeError('Found data directory, but nothing in it. '
-                                   'Remove it and restart')
+                raise RuntimeError('Found data directory, but not %s in it. '
+                                   'Remove it and restart' % path_or_url)
+            path_or_url = 'file://' + os.path.abspath(path_or_url)
         else:
             print('Downloading from web...')
         print(path_or_url)
