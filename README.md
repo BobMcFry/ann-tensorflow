@@ -8,3 +8,6 @@
 1. Create a new Jupyter Notebook.
 1. Hit `Edit -> Edit Notebook Metadata`.
 1. Add `"git": { "suppress_outputs": true },` as a top level element to the json metadata. This will be a notification to our git filter that we want to strip the metadata.
+
+## How do I quickly generate HTML from ipynb?
+Run `jupyter-nbconvert --to=html --execute <notebook>.ipynb`
