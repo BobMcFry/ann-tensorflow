@@ -194,4 +194,5 @@ if __name__ == "__main__":
         # axes (see above)
         # NOTE: When using matplotlib==2.1.0, there seems to be a bug causing
         # this to fail. Works with 2.0.2
+        # NOTE: dows not work in notebooks
         plt.pause(3 / len(weights))
