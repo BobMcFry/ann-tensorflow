@@ -10,7 +10,7 @@ np.random.seed(1)
 
 
 class MNISTLoader():
-    '''``MNISTLoader class can load MNIST dataset from the web or disk.
+    '''``MNISTLoader`` class can load MNIST dataset from the web or disk.
 
     Attributes
     ----------
@@ -55,7 +55,7 @@ class MNISTLoader():
         if not os.path.exists(self.data_folder):
             os.mkdir(self.data_folder)
             # helper to shorten url creation
-            url = lambda name: url(name)
+            url = lambda name: urljoin(base_link, name)
             self.test_data = self._load(url(self.test_data_name), False, True)
             self.test_labels = self._load(url(self.test_labels_name),
                                           True, True)
