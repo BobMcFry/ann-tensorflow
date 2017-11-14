@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow import truncated_normal_initializer
 import numpy as np
 from mnist import MNISTLoader
+from datetime import datetime
 
 def train(n_epochs=10, batch_size=50):
     # load the data
@@ -90,11 +91,14 @@ def train(n_epochs=10, batch_size=50):
             test_step_entropy, weights)
 
 if __name__ == "__main__":
+    start = datetime.now()
     training_accuracy, test_accuracy, training_entropy, test_entropy, weights = train(3,
-            50)
+            10000)
+    end = datetime.now()
     # Problem: We append the accuray every 10th step, so we may miss the last
     # one
     print('(Almost) final test accuracy: %f' % test_accuracy[-1])
+    print('Time elpased (hh:mm:ss.ms) {}'.format(end-start))
     ############################################################################
     #                         Plot entropy and accuray                         #
     ############################################################################
@@ -143,6 +147,6 @@ if __name__ == "__main__":
         # pause so that it always takes 5 seconds
         # Note: The animation seems to slow down linearly, unless we clear the
         # axes (see above)
-        plt.pause(5 / len(weights))
+        plt.pause(1 / len(weights))
 
 
