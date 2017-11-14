@@ -6,28 +6,59 @@ import numpy as np
 from mnist import MNISTLoader
 from datetime import datetime
 
+
 def train(n_epochs=10, batch_size=50):
+    '''Run training.
+
+    Parameters
+    ----------
+    n_epochs    :   int
+                    Number of times to visit the entire dataset
+    batch_size  :   int
+                    Size of the minibatches
+
+    Returns
+    -------
+    tuple
+            tuple of 5 np.ndarrays.
+
+                - List of accuracies over entire training set, collected every
+                10th batch
+                - List of accuracies over entire test set, collected every 10th
+                batch
+                - List of average cross entropies over entire training set,
+                collected every 10th batch
+                - List of average cross entropie over entire test set, collected
+                every 10th batch
+                - List of weights collected every 10th batch
+
+    '''
     # load the data
     loader = MNISTLoader()
-    d_train, l_train, d_test, l_test = (loader.training_data, loader.training_labels,
-            loader.test_data, loader.test_labels)
+    d_train, l_train, d_test, l_test = (loader.training_data,
+                                        loader.training_labels,
+                                        loader.test_data, loader.test_labels)
 
-    ################################################################################
-    #               The data comes in image format, which we flatten               #
-    ################################################################################
-    d_test  = np.reshape(d_test, (-1, 28 * 28))
+    ##########################################################################
+    #               The data comes in image format, which we flatten         #
+    ##########################################################################
+    # keep the first dim as it is
+    d_test = np.reshape(d_test, (-1, 28 * 28))
     d_train = np.reshape(d_train, (-1, 28 * 28))
-    ################################################################################
-    #        The labels only have 1 dimensions, we need to blow it up to 2         #
-    ################################################################################
-    l_test  = l_test[:, np.newaxis]
+    ##########################################################################
+    #        The labels only have 1 dimension, we need to blow it up to 2    #
+    ##########################################################################
+    l_test = l_test[:, np.newaxis]
     l_train = l_train[:, np.newaxis]
 
     # Weight matrix
     mean = 0.0
     std = 0.000002
-    W = tf.get_variable('weights', initializer=truncated_normal_initializer(mean,
-        std, seed=1), shape=[28 * 28, 10])
+    W = tf.get_variable(
+        'weights',
+        initializer=truncated_normal_initializer(mean, std, seed=1),
+        shape=[28 * 28, 10]
+    )
 
     # bias vector
     b = tf.get_variable('bias', initializer=tf.zeros_initializer(), shape=[10])
@@ -37,30 +68,32 @@ def train(n_epochs=10, batch_size=50):
 
     # desired output (ie real labels)
     d = tf.placeholder(tf.int32, [None, 1], name='labels')
-    # one-hot encoding produuces a vecor of shape (batch, 1, 10) instead of (batch, 10)
+    # one-hot encoding produuces a vecor of shape (batch, 1, 10) instead of
+    # (batch, 10)
     d_1_hot = tf.squeeze(tf.one_hot(d, 10), axis=1)
 
     # computed output of the network without activation
     y = tf.matmul(x, W) + b
 
     # loss function
-    cross_entropy      = tf.nn.softmax_cross_entropy_with_logits(logits  = y, labels = d_1_hot)
+    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
+        logits=y, labels=d_1_hot)
     mean_cross_entropy = tf.reduce_mean(cross_entropy)
-    optimizer          = tf.train.GradientDescentOptimizer(learning_rate=0.5)
-    training_step      = optimizer.minimize(cross_entropy)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
+    training_step = optimizer.minimize(cross_entropy)
 
     # check if neuron firing strongest coincides with max value position in real
     # labels
     correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(d_1_hot, 1))
-    accuracy           = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # record accuracy
     training_step_accuracy = []
-    test_step_accuracy     = []
+    test_step_accuracy = []
 
     # record cross-entropy
     training_step_entropy = []
-    test_step_entropy     = []
+    test_step_entropy = []
 
     # record weights
     weights = []
@@ -71,30 +104,46 @@ def train(n_epochs=10, batch_size=50):
         for epoch in range(n_epochs):
             print('Epoch %d' % epoch)
             for mb, labels in loader.batches(d_train, l_train, batch_size):
-                values = sess.run({'weights': W, 'step': training_step}, feed_dict={x: mb, d: labels})
+                # pass a dict to later retrieve tensors by name. We need the
+                # weigweights only for the record
+                values = sess.run(
+                    {'weights': W, 'step': training_step},
+                    feed_dict={x: mb, d: labels})
                 if i % 10 == 0:
-                    current_train_accuracy = sess.run(accuracy, feed_dict={x: d_train, d: l_train})
-                    current_test_accuracy = sess.run(accuracy, feed_dict={x: d_test, d: l_test})
+                    # run the ops that will give us accuracies and entropies
+                    # (not needed otherwise)
+                    current_train_accuracy = sess.run(
+                        accuracy, feed_dict={x: d_train, d: l_train})
+                    current_test_accuracy = sess.run(
+                        accuracy, feed_dict={x: d_test, d: l_test})
+
                     training_step_accuracy.append(current_train_accuracy)
                     test_step_accuracy.append(current_test_accuracy)
 
-                    current_train_entropy = sess.run(mean_cross_entropy, feed_dict={x: d_train, d: l_train})
-                    current_test_entropy = sess.run(mean_cross_entropy, feed_dict={x: d_test, d: l_test})
+                    current_train_entropy = sess.run(
+                        mean_cross_entropy, feed_dict={
+                            x: d_train, d: l_train})
+                    current_test_entropy = sess.run(
+                        mean_cross_entropy, feed_dict={
+                            x: d_test, d: l_test})
+
                     training_step_entropy.append(current_train_entropy)
                     test_step_entropy.append(current_test_entropy)
 
                     weights.append(np.reshape(values['weights'], (28, 28, 10)))
-                i += 1
 
+                # increment batch counter
+                i += 1
 
     return (training_step_accuracy, test_step_accuracy, training_step_entropy,
             test_step_entropy, weights)
 
+
 if __name__ == "__main__":
     start = datetime.now()
-    training_accuracy, test_accuracy, training_entropy, test_entropy, weights = train(3,
-            10000)
     end = datetime.now()
+    training_accuracy, test_accuracy, training_entropy, test_entropy, weights = train(
+        3, 500)
     # Problem: We append the accuray every 10th step, so we may miss the last
     # one
     print('(Almost) final test accuracy: %f' % test_accuracy[-1])
@@ -147,6 +196,7 @@ if __name__ == "__main__":
         # pause so that it always takes 5 seconds
         # Note: The animation seems to slow down linearly, unless we clear the
         # axes (see above)
+        # NOTE: When using matplotlib==2.1.0, there seems to be a bug causing
+        # this to fail. Works with 2.0.2
+        # NOTE: does not work in notebooks
         plt.pause(1 / len(weights))
-
-
