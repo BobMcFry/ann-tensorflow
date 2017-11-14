@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow import truncated_normal_initializer
 import numpy as np
 from mnist import MNISTLoader
+from datetime import datetime
 
 
 def train(n_epochs=10, batch_size=50):
@@ -139,11 +140,14 @@ def train(n_epochs=10, batch_size=50):
 
 
 if __name__ == "__main__":
+    start = datetime.now()
+    end = datetime.now()
     training_accuracy, test_accuracy, training_entropy, test_entropy, weights = train(
         3, 500)
     # Problem: We append the accuray every 10th step, so we may miss the last
     # one
     print('(Almost) final test accuracy: %f' % test_accuracy[-1])
+    print('Time elpased (hh:mm:ss.ms) {}'.format(end-start))
     ############################################################################
     #                         Plot entropy and accuray                         #
     ############################################################################
@@ -194,5 +198,5 @@ if __name__ == "__main__":
         # axes (see above)
         # NOTE: When using matplotlib==2.1.0, there seems to be a bug causing
         # this to fail. Works with 2.0.2
-        # NOTE: dows not work in notebooks
-        plt.pause(3 / len(weights))
+        # NOTE: does not work in notebooks
+        plt.pause(1 / len(weights))
