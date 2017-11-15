@@ -6,11 +6,32 @@ import tensorflow as tf
 SEED = 5
 np.random.seed(SEED)
 
+# counter for autmatically creating conv layer variable names
 conv_n = 0
-fc_n = 0
+
 def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
+    '''Create a convolutional layer with fixed activation function and variable
+    initialisation. The activation function is ``tf.nn.tanh`` and variables are
+    initialised from a truncated normal distribution with an stddev of 0.1
+
+    Parameters
+    ----------
+    input   :   tf.Variable
+                Input to the layer
+    kshape  :   tuple or list
+                Shape of the kernel tensor
+    strides :   tuple or list
+                Strides
+
+    Returns
+    -------
+    tf.Variable
+            The variable representing the layer activation (tanh(conv + bias))
+
+    '''
     global conv_n
     conv_n += 1
+    # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
         kernels = tf.Variable(tf.truncated_normal(kshape, stddev=0.1, seed=SEED),
                 kshape)
@@ -20,7 +41,31 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
         activation = tf.nn.tanh(conv + biases, name='activation')
         return activation
 
+# counter for autmatically creating fully-connected layer variable names
+fc_n = 0
 def fully_connected(input, n_out, with_activation=False):
+    '''Create a fully connected layer with fixed activation function and variable
+    initialisation. The activation function is ``tf.nn.tanh`` and variables are
+    initialised from a truncated normal distribution with an stddev of 0.1
+
+    Parameters
+    ----------
+    input   :   tf.Variable
+                Input to the layer
+    n_out   :   int
+                Number of neurons in the layer
+    with_activation :   bool
+                        Return activation or drive (useful when planning to use
+                        ``softmax_cross_entropy_with_logits`` which requires
+                        unscaled logits)
+
+
+    Returns
+    -------
+    tf.Variable
+            The variable representing the layer activation (tanh(input * Weights
+            + bias))
+    '''
     global fc_n
     fc_n += 1
     with tf.variable_scope('fully%d' % fc_n):
@@ -28,9 +73,9 @@ def fully_connected(input, n_out, with_activation=False):
         W = tf.get_variable(
                 'weights',
                 initializer=init,
-                shape=(input.shape[-1], n_out),
-                dtype=tf.float32
-                )
+                shape=(input.shape[-1], n_out),     # the last dim of the input
+               dtype=tf.float32                     # is the first dim of the weights2
+            )
         bias = tf.get_variable('bias', initializer=init, shape=(n_out,))
         drive = tf.matmul(input, W) + bias
         if with_activation:
@@ -39,7 +84,30 @@ def fully_connected(input, n_out, with_activation=False):
             return drive
 
 def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
+    '''Train the fixed graph on CIFAR-10.
 
+    Parameters
+    ----------
+    batch_size  :   int
+                    Size of training batch
+    learning_rate   :   float
+                        Learning rate for the ADAM optimizer
+    epochs          :   int
+                        Number of times to visit the entire training set
+    record_step     :   int
+                        Accuracy on test set will be recorded every
+                        ``record_step`` training steps
+
+    Returns
+    -------
+    tuple
+            Array of cross entropies and array of test accuracies in a tuple
+    '''
+
+    assert batch_size > 0, 'Batch size must be positive'
+    assert learning_rate > 0, 'Learning rate must be positive'
+    assert epochs > 0, 'Number of epochs must be positive'
+    assert record_step > 0, 'Recording step must be positive'
     x = tf.placeholder(tf.float32, shape=(None, 32, 32, 3), name='input')
     l = tf.placeholder(dtype=tf.uint8, shape=(None, 1), name='labels')
     l_one_hot = tf.squeeze(tf.one_hot(l, 10), axis=1)
@@ -72,6 +140,9 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     cifar = CIFAR()
+    ###############################################
+    #  Pointless array preallocation for records  #
+    ###############################################
     N, _, _= cifar.get_sizes()
     n_propagations = (N // batch_size)
     if N % batch_size != 0:
