@@ -21,7 +21,7 @@ class ParameterTest(object):
                 epochs=self.epochs, return_records=False)
 
     def __str__(self):
-        return ('{opti}, learning rate={lr:4.3f}, batch size={bs:<5d}, '
+        return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
                 'epochs={epochs:<5d}, accuracy={acc:4.3f}'.format(
                     opti=self.optimizer,
                     lr=self.learning_rate,
