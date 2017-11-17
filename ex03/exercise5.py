@@ -1,6 +1,11 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from cifar_helper import CIFAR
+if __name__ == "__main__":
+    # relative import does not work when running as a script (w/o hacks)
+    from cifar_helper import CIFAR
+else:
+    # if used as module, do this
+    from .cifar_helper import CIFAR
 
 import tensorflow as tf
 SEED = 5
@@ -83,7 +88,8 @@ def fully_connected(input, n_out, with_activation=False):
         else:
             return drive
 
-def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
+def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
+        return_records=False, optimizer='GradientDescent'):
     '''Train the fixed graph on CIFAR-10.
 
     Parameters
@@ -97,11 +103,18 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
     record_step     :   int
                         Accuracy on test set will be recorded every
                         ``record_step`` training steps
+    return_records  :   bool
+                        If False, return only final test set accuracy, otherwise
+                        return vectors of entropies and accuracies (according to
+                        record_step)
+    optimizer   :   str
+                    Name of the optimizer to use
 
     Returns
     -------
-    tuple
-            Array of cross entropies and array of test accuracies in a tuple
+    float or tuple
+            Final accuracies or array of cross entropies and array of test
+            accuracies in a tuple
     '''
 
     assert batch_size > 0, 'Batch size must be positive'
@@ -132,7 +145,9 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=fc2_logit,
             labels=l_one_hot)
     mean_cross_entropy = tf.reduce_mean(cross_entropy)
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(mean_cross_entropy)
+    optimizer_obj = getattr(tf.train, optimizer + 'Optimizer')
+    print('Using %s optimizer' % optimizer)
+    train_step = optimizer_obj(learning_rate=learning_rate).minimize(mean_cross_entropy)
 
     # check if neuron firing strongest coincides with max value position in real
     # labels
@@ -140,42 +155,41 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     cifar = CIFAR()
-    ###############################################
-    #  Pointless array preallocation for records  #
-    ###############################################
-    N, _, _= cifar.get_sizes()
-    n_propagations = (N // batch_size)
-    if N % batch_size != 0:
-        n_propagations += 1
-    n_entropies = n_propagations * epochs
-    entropies = np.zeros(n_entropies, dtype=np.float32)
-    n_accuracies = n_entropies // record_step
-    if n_entropies % record_step != 0:
-        n_accuracies += 1
-    accuracies = np.zeros(n_accuracies, dtype=np.float32)
+    entropies = []
+    accuracies = []
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         propagation = 0
-        accu_counter = 0
         for epoch in range(epochs):
             print('Starting epoch %d' % epoch)
             for data, labels in cifar.get_training_batch(batch_size):
                 entropy, _ = sess.run([mean_cross_entropy, train_step],
                         feed_dict={x: data, l: labels[:, np.newaxis]})
-                entropies[propagation] = entropy
-                if propagation % record_step == 0:
-                    test_acc = sess.run([accuracy], feed_dict={x:
+                if return_records:
+                    entropies.append(entropy)
+                    if propagation % record_step == 0:
+                        test_acc = sess.run([accuracy], feed_dict={x:
+                            cifar._test_data, l: cifar._test_labels[:,
+                                np.newaxis]})
+                        accuracies.append(test_acc[0])
+                        print('Current test accuracy %f' % test_acc[0])
+                    propagation += 1
+
+        final_accuracy = sess.run([accuracy], feed_dict={x:
                         cifar._test_data, l: cifar._test_labels[:,
                             np.newaxis]})
-                    accuracies[accu_counter] = test_acc[0]
-                    accu_counter += 1
-                    print('Current test accuracy %f' % test_acc[0])
-                propagation += 1
-    return entropies, accuracies
+    if return_records:
+        if propagation % record_step == 1:  #   we just recorded
+            pass
+        else:
+            accuracies.append(final_accuracy[0])
+        return entropies, accuracies
+    else:
+        return final_accuracy[0]
 
 def main():
-    entropies, accuracies = train(epochs=5)
+    entropies, accuracies = train(batch_size=1000, epochs=3, return_records=True)
     f = plt.figure()
     ax = f.add_subplot(111)
     ax.set_title('Mean entropy & test accuracy')
