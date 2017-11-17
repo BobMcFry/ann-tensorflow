@@ -1,0 +1,78 @@
+#!/bin/bash
+
+## Portable Batch System Professional (PBS Professional)
+##
+## Documentation
+## http://www.pbsworks.com/SupportGT.aspx?d=PBS-Professional,-Documentation
+##
+
+##
+## Job specifications
+##
+
+#!!! Job name must be < 15 characters, first one must be alphabetic
+#PBS -N "iannwtf"
+
+#!!! sysout, syserr
+#PBS -e /home/student/r/rdiederichse/iannwtf_out.txt
+#PBS -o /home/student/r/rdiederichse/iannwtf_err.txt
+
+## Required calculation time (executed in 48h intervals)
+#PBS -l select=1:ncpus=1:mem=8000:ngpus=1,place=vscatter:excl
+
+#!!! Send email to yourself for begin, end and abort of the job
+#PBS -m abe
+#PBS -M rdiederichse@uni-osnabrueck.de
+
+##
+## USER APPLICATION
+##
+
+#!!! Is this necessary?
+export PATH="$PATH:/home/student/r/rdiederichse/.local/bin"
+
+# executable file
+UAPP="python3 util.py"
+# command line parameters
+UPRM="-o GradientDescent -l 0.01 -b 1000 -e 1 -f grid_search.txt -m ex03.exercise5"
+
+##
+## PBS Professional job execution
+##
+
+echo "*** Start of PBS Professional job ***"
+date
+# Identify Job-ID
+echo ""
+echo 'Job-ID:'
+echo $PBS_JOBID
+echo ""
+# Identify assigned nodes
+cd /dev/cpuset/PBSPro/$PBS_JOBID
+CPUNODES=`cat cpuset.mems`
+echo "Node(s):"
+echo $CPUNODES
+echo ""
+# Identify assigned cpus
+CPULIST=`cat cpuset.cpus`
+echo "CPU(s):"
+echo "$CPULIST"
+echo ""
+# Identify current working directory
+echo "Directory:"
+echo "$PBS_O_WORKDIR"
+cd $PBS_O_WORKDIR
+echo ""
+# Restrict cpu and memory ressources to assigned nodes,
+# prevent migration or interference from other jobs
+NUMACMD="numactl -i $CPUNODES -N $CPUNODES"
+# Print final command
+echo "Command:"
+echo "$NUMACMD $UAPP $UPRM"
+# Execute final command
+$NUMACMD $UAPP $UPRM
+echo ""
+date
+echo "PBS_NODEFILE: `cat $PBS_NODEFILE`"
+echo "*** End of PBS Professional job ***"
+
