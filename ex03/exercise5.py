@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as plt
 if __name__ == "__main__":
     # relative import does not work when running as a script (w/o hacks)
     from cifar_helper import CIFAR
@@ -189,6 +188,9 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
         return final_accuracy[0]
 
 def main():
+    # avoid polluting global namespace if used as a module (e.g. can't use this
+    # on hpc2)
+    from matplotlib import pyplot as plt
     entropies, accuracies = train(batch_size=1000, epochs=3, return_records=True)
     f = plt.figure()
     ax = f.add_subplot(111)
