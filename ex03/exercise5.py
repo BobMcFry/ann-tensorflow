@@ -13,6 +13,7 @@ np.random.seed(SEED)
 # counter for autmatically creating conv layer variable names
 conv_n = 0
 
+
 def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
     '''Create a convolutional layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
@@ -37,16 +38,32 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
     conv_n += 1
     # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
-        kernels = tf.Variable(tf.truncated_normal(kshape, stddev=0.1, seed=SEED),
-                kshape)
+        kernels = tf.Variable(
+            tf.truncated_normal(
+                kshape,
+                stddev=0.1,
+                seed=SEED),
+            kshape)
         bias_shape = (kshape[-1],)
-        biases = tf.Variable(tf.truncated_normal(bias_shape, stddev=0.1, seed=SEED))
-        conv = tf.nn.conv2d(input, kernels, strides, padding='SAME', name='conv')
+        biases = tf.Variable(
+            tf.truncated_normal(
+                bias_shape,
+                stddev=0.1,
+                seed=SEED))
+        conv = tf.nn.conv2d(
+            input,
+            kernels,
+            strides,
+            padding='SAME',
+            name='conv')
         activation = tf.nn.tanh(conv + biases, name='activation')
         return activation
 
+
 # counter for autmatically creating fully-connected layer variable names
 fc_n = 0
+
+
 def fully_connected(input, n_out, with_activation=False):
     '''Create a fully connected layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
@@ -77,8 +94,8 @@ def fully_connected(input, n_out, with_activation=False):
         W = tf.get_variable(
                 'weights',
                 initializer=init,
-                shape=(input.shape[-1], n_out),     # the last dim of the input
-               dtype=tf.float32                     # is the first dim of the weights2
+                shape=(input.shape[-1], n_out), # the last dim of the input
+               dtype=tf.float32                 # is the 1st dim of the weights
             )
         bias = tf.get_variable('bias', initializer=init, shape=(n_out,))
         drive = tf.matmul(input, W) + bias
@@ -87,8 +104,9 @@ def fully_connected(input, n_out, with_activation=False):
         else:
             return drive
 
+
 def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
-        return_records=False, optimizer='GradientDescent'):
+          return_records=False, optimizer='GradientDescent'):
     '''Train the fixed graph on CIFAR-10.
 
     Parameters
@@ -128,14 +146,18 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
     kernel_shape1 = (5, 5, 3, 16)
     activation1 = conv_layer(x, kernel_shape1)
 
-    pool1 = tf.nn.max_pool(activation1, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1),
-            padding='SAME')
+    pool1 = tf.nn.max_pool(
+        activation1, ksize=(
+            1, 2, 2, 1), strides=(
+            1, 2, 2, 1), padding='SAME')
 
     kernel_shape2 = (3, 3, 16, 32)
     activation2 = conv_layer(pool1, kernel_shape2)
 
-    pool2 = tf.nn.max_pool(activation2, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1),
-            padding='SAME')
+    pool2 = tf.nn.max_pool(
+        activation2, ksize=(
+            1, 2, 2, 1), strides=(
+            1, 2, 2, 1), padding='SAME')
 
     pool2_reshaped = tf.reshape(pool2, (-1, 2048), name='reshaped1')
     fc1 = fully_connected(pool2_reshaped, 512, with_activation=True)
@@ -143,15 +165,19 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
     fc2_logit = fully_connected(fc1, 10)
 
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=fc2_logit,
-            labels=l_one_hot)
+                                                            labels=l_one_hot)
     mean_cross_entropy = tf.reduce_mean(cross_entropy)
     optimizer_obj = getattr(tf.train, optimizer + 'Optimizer')
     print('Using %s optimizer' % optimizer)
-    train_step = optimizer_obj(learning_rate=learning_rate).minimize(mean_cross_entropy)
+    train_step = optimizer_obj(
+        learning_rate=learning_rate).minimize(mean_cross_entropy)
 
     # check if neuron firing strongest coincides with max value position in real
     # labels
-    correct_prediction = tf.equal(tf.argmax(fc2_logit, 1), tf.argmax(l_one_hot, 1))
+    correct_prediction = tf.equal(
+        tf.argmax(
+            fc2_logit, 1), tf.argmax(
+            l_one_hot, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     cifar = CIFAR()
@@ -164,23 +190,26 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
         for epoch in range(epochs):
             print('Starting epoch %d' % epoch)
             for data, labels in cifar.get_training_batch(batch_size):
-                entropy, _ = sess.run([mean_cross_entropy, train_step],
-                        feed_dict={x: data, l: labels[:, np.newaxis]})
+                entropy, _ = sess.run(
+                    [mean_cross_entropy, train_step],
+                    feed_dict={x: data, l: labels[:, np.newaxis]})
                 if return_records:
                     entropies.append(entropy)
                     if propagation % record_step == 0:
-                        test_acc = sess.run([accuracy], feed_dict={x:
-                            cifar._test_data, l: cifar._test_labels[:,
-                                np.newaxis]})
+                        test_acc = sess.run(
+                            [accuracy],
+                            feed_dict={x: cifar._test_data,
+                                       l: cifar._test_labels[:, np.newaxis]})
                         accuracies.append(test_acc[0])
                         print('Current test accuracy %f' % test_acc[0])
                     propagation += 1
 
-        final_accuracy = sess.run([accuracy], feed_dict={x:
-                        cifar._test_data, l: cifar._test_labels[:,
-                            np.newaxis]})
+        final_accuracy = sess.run(
+            [accuracy],
+            feed_dict={x: cifar._test_data, l: cifar._test_labels
+                       [:, np.newaxis]})
     if return_records:
-        if propagation % record_step == 1:  #   we just recorded
+        if propagation % record_step == 1:  # we just recorded
             pass
         else:
             accuracies.append(final_accuracy[0])
@@ -188,20 +217,30 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
     else:
         return final_accuracy[0]
 
+
 def main():
     # avoid polluting global namespace if used as a module (e.g. can't use this
     # on hpc2)
     from matplotlib import pyplot as plt
-    entropies, accuracies = train(batch_size=1000, epochs=3, return_records=True)
+    batch_size = 512
+    epochs = 3
+    entropies, accuracies = train(
+        batch_size=batch_size, epochs=epochs, return_records=True)
     f = plt.figure()
-    ax = f.add_subplot(111)
-    ax.set_title('Mean entropy & test accuracy')
+    ax = f.add_subplot(121)
+    ax.set_title('Mean entropy over batch (size %d)' % batch_size)
     ax.set_xlabel('Training step')
-    ax.plot(np.linspace(0, len(entropies), num=len(accuracies)), accuracies,
-            label='accuracies')
-    ax.plot(entropies, label='entropies')
-    plt.legend()
+    ax.set_ylabel('Entropy')
+
+    ax2 = f.add_subplot(122)
+    ax2.set_title('Accuracy on the test set')
+    ax2.set_xlabel('Training step')
+    ax2.set_ylabel('Accuracy')
+
+    ax.plot(entropies)
+    ax2.plot(np.linspace(0, len(entropies), num=len(accuracies)), accuracies)
     plt.show()
+
 
 if __name__ == "__main__":
     main()
