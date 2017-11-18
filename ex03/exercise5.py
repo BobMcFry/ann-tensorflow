@@ -96,7 +96,7 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
     batch_size  :   int
                     Size of training batch
     learning_rate   :   float
-                        Learning rate for the ADAM optimizer
+                        Learning rate for the optimizer
     epochs          :   int
                         Number of times to visit the entire training set
     record_step     :   int
@@ -120,6 +120,7 @@ def train(batch_size=500, learning_rate=1e-4, epochs=10, record_step=20,
     assert learning_rate > 0, 'Learning rate must be positive'
     assert epochs > 0, 'Number of epochs must be positive'
     assert record_step > 0, 'Recording step must be positive'
+
     x = tf.placeholder(tf.float32, shape=(None, 32, 32, 3), name='input')
     l = tf.placeholder(dtype=tf.uint8, shape=(None, 1), name='labels')
     l_one_hot = tf.squeeze(tf.one_hot(l, 10), axis=1)
