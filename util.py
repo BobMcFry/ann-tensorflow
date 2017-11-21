@@ -11,7 +11,7 @@ tf.set_random_seed(SEED)
 conv_n = 0
 
 
-def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
+def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
     '''Create a convolutional layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -51,15 +51,14 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1)):
             strides,
             padding='SAME',
             name='conv')
-        activation = tf.nn.tanh(conv + biases, name='activation')
-        return activation
+        return activation(tf.nn.tanh(conv + biases, name='activation'))
 
 
 # counter for autmatically creating fully-connected layer variable names
 fc_n = 0
 
 
-def fully_connected(input, n_out, with_activation=False):
+def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
     '''Create a fully connected layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -95,7 +94,7 @@ def fully_connected(input, n_out, with_activation=False):
         bias = tf.get_variable('bias', initializer=init, shape=(n_out,))
         drive = tf.matmul(input, W) + bias
         if with_activation:
-            return tf.nn.tanh(drive)
+            return activation(drive)
         else:
             return drive
 
@@ -149,10 +148,48 @@ def weighted_pool_layer(input_layer, ksize, strides=(1, 1, 1, 1)):
         a = tf.get_variable('a',
                 initializer=tf.truncated_normal_initializer(),
                 shape=(1,),
-                dtype=tf.nn.float32, trainable=True)
-        pool = (a * tf.nn.max_pool(input_layer, ksize, strides, padding='SAME') +
-                (1 - a) * tf.nn.avg_pool(input_layer, ksize, strides, padding='SAME'))
+                dtype=tf.float32, trainable=True)
+        max_pool = tf.nn.max_pool(input_layer, ksize, strides, padding='SAME')
+        avg_pool = tf.nn.avg_pool(input_layer, ksize, strides, padding='SAME')
+        pool = (a * max_pool + (1 - a) * avg_pool)
         return pool
+
+inc_n = 0
+
+def inception2d(x, in_channels, filter_count):
+    global inc_n
+    inc_n += 1
+    with tf.variable_scope('inception%d' % inc_n):
+        # bias dimension = 3*filter_count and then the extra in_channels for the avg
+        # pooling
+        bias = tf.Variable(tf.truncated_normal([3*filter_count + in_channels]))
+
+        # 1x1
+        one_filter = tf.Variable(tf.truncated_normal([1, 1, in_channels,
+            filter_count]))
+        one_by_one = tf.nn.conv2d(x, one_filter,
+                    strides=[1, 1, 1, 1], padding='SAME')
+
+        # 3x3
+        three_filter = tf.Variable(tf.truncated_normal([3, 3, in_channels,
+            filter_count]))
+        three_by_three = tf.nn.conv2d(x,
+                    three_filter, strides=[1, 1, 1, 1], padding='SAME')
+
+        # 5x5
+        five_filter = tf.Variable(tf.truncated_normal([5, 5, in_channels,
+            filter_count]))
+        five_by_five = tf.nn.conv2d(x, five_filter,
+                    strides=[1, 1, 1, 1], padding='SAME')
+
+        # avg pooling
+        pooling = tf.nn.avg_pool(x, ksize=[1, 3, 3, 1], strides=[1, 1, 1, 1],
+                padding='SAME')
+
+        x = tf.concat([one_by_one, three_by_three, five_by_five, pooling], axis=3)
+        # Concat in the 4th dim to stack
+        x = tf.nn.bias_add(x, bias)
+        return tf.nn.relu(x)
 
 
 class ParameterTest(object):
@@ -170,7 +207,7 @@ class ParameterTest(object):
         '''Run the training process with the specified settings.'''
         self.accuracy = self.train_function(optimizer=self.optimizer,
                 learning_rate=self.learning_rate, batch_size=self.batch_size,
-                epochs=self.epochs, return_records=False)
+                epochs=self.epochs, return_records=False, activation=tf.nn.tanh)
 
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
