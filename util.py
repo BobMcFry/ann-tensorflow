@@ -7,7 +7,17 @@ import numpy as np
 SEED = 5
 np.random.seed(SEED)
 tf.set_random_seed(SEED)
-# counter for autmatically creating conv layer variable names
+
+pool_n = 0
+
+
+def max_pool_layer(input, ksize, strides):
+    global pool_n
+    pool_n += 1
+    with tf.variable_scope('pool%d' % pool_n):
+        return tf.nn.max_pool(input,
+                ksize=ksize, strides=strides, padding='SAME')
+
 conv_n = 0
 
 
@@ -157,6 +167,20 @@ def weighted_pool_layer(input_layer, ksize, strides=(1, 1, 1, 1)):
 inc_n = 0
 
 def inception2d(x, in_channels, filter_count):
+    '''Helper function to create inception module
+
+    Parameters
+    ----------
+    in_channels :   int
+                    number of input channels
+    filter_count    :   int
+                        number of filters to use for soemthing ?
+
+    Returns
+    -------
+    tf.Tensor
+           Tensor with filter_count*3 +1 output channels
+    '''
     global inc_n
     inc_n += 1
     with tf.variable_scope('inception%d' % inc_n):
@@ -194,20 +218,28 @@ def inception2d(x, in_channels, filter_count):
 
 class ParameterTest(object):
     '''Test one set of parameters to the train() function.'''
-    def __init__(self, optimizer, learning_rate, batch_size, epochs,
+    def __init__(self, model, batch_size, epochs,
             train_function):
-        self.optimizer = optimizer
-        self.learning_rate = learning_rate
+        self.model = model
         self.batch_size = batch_size
         self.epochs = epochs
         self.accuracy = None
-        self.train_function = train_function
+        self.train_function=train_function
 
     def run(self):
         '''Run the training process with the specified settings.'''
-        self.accuracy = self.train_function(optimizer=self.optimizer,
-                learning_rate=self.learning_rate, batch_size=self.batch_size,
-                epochs=self.epochs, return_records=False, activation=tf.nn.tanh)
+
+        save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}'.format(
+                name=self.model.__class__.__name__,
+                batch=self.batch_size,
+                lr=self.model.lr,
+                epochs=self.epochs,
+                opti=self.model.opt,
+                act=self.model.act_fn.__name__
+        )
+        self.accuracy = self.train_function(self.model, self.batch_size,
+                self.epochs, save_fname, return_records=False,
+                record_step=30)
 
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
@@ -235,16 +267,22 @@ def main():
             help='Number of epochs')
     parser.add_argument('-f', '--file', required=True, type=str,
             help='File to write result to')
-    parser.add_argument('-m', '--module', required=True, type=str,
-            help='Module to search for train() function.')
+    parser.add_argument('-m', '--model', required=True, type=str,
+            help='Package path where Model class is located')
+    parser.add_argument('-t', '--train', required=True, type=str,
+            help='Module to search for train_model() function.')
 
     args = parser.parse_args()
-    train_fn = __import__(args.module, globals(), locals(), ['train']).train
-    pt = ParameterTest(args.optimizer, args.learning_rate, args.batch_size,
-        args.epochs, train_fn)
+    model_cls = __import__(args.model, globals(), locals(), ['Model']).Model
+    train_fn = __import__(args.train, globals(), locals(),
+            ['train_model']).train_model
+
+    model = model_cls(args.learning_rate, args.optimizer, tf.nn.relu)
+
+    pt = ParameterTest(model, args.batch_size, args.epochs, train_fn)
     pt.run()
     print(pt)
-    # the OS ensures sequential writes
+    # the OS ensures sequential writes with concurrent processes
     with open(args.file, 'a') as f:
         f.write(str(pt) + '\n')
         f.flush()
