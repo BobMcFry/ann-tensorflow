@@ -11,3 +11,16 @@
 
 ## How do I quickly generate HTML from ipynb?
 Run `jupyter-nbconvert --to=html --execute <notebook>.ipynb`
+
+## How do I train a network?
+Run something like
+```
+python util.py -o RMSProp -l 0.001 -b 32 -e 20 -f grid_search.txt -m
+ex04.ex03model_improved -t ex04.exercise5
+```
+where
+* `-t`  is the module of the `train_model` function
+* `-f`  is the file to log to
+* `-m`  is the module whera a `Model` class (subclass of `model.BaseModel`)
+    class definition is located
+

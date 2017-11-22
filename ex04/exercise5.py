@@ -26,7 +26,7 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                         accuracies.append(test_acc[0])
                     print('Current training accuracy %f' % test_acc[0])
                 propagation += 1
-        saver.save(sess, save_fname, global_step=epoch)
+            saver.save(sess, save_fname, global_step=epoch)
 
         final_accuracy = model.get_accuracy(sess, svhn._validation_data,
                             svhn._validation_labels)
