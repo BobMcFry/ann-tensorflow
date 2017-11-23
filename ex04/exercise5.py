@@ -50,17 +50,17 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                     if val_accuracy < 0.3:
                         raise RuntimeError('This isn\'t going anywhere.')
 
-    if training_step % record_step == 1:
-        # we just recorded, final_accuracy already correct
-        pass
-    else:
-        # we need to recompute the final accuracy
-        final_accuracy = model.get_accuracy(sess, svhn._validation_data,
-                            svhn._validation_labels)
-        accuracies.append(final_accuracy)
+        if training_step % record_step == 1:
+            # we just recorded, final_accuracy already correct
+            pass
+        else:
+            # we need to recompute the final accuracy
+            final_accuracy = model.get_accuracy(sess, svhn._validation_data,
+                                svhn._validation_labels)
+            accuracies.append(final_accuracy)
 
-    if return_records:
-        return entropies, accuracies
-    else:
-        return final_accuracy
+        if return_records:
+            return entropies, accuracies
+        else:
+            return final_accuracy
 
