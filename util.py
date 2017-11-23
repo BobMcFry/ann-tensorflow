@@ -229,7 +229,7 @@ class ParameterTest(object):
     def run(self):
         '''Run the training process with the specified settings.'''
 
-        save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}'.format(
+        save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
                 name=self.model.__class__.__name__,
                 batch=self.batch_size,
                 lr=self.model.lr,
@@ -244,8 +244,8 @@ class ParameterTest(object):
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
                 'epochs={epochs:<5d}, accuracy={acc:4.3f}'.format(
-                    opti=self.optimizer,
-                    lr=self.learning_rate,
+                    opti=self.model.opt,
+                    lr=self.model.lr,
                     bs=self.batch_size,
                     epochs=self.epochs,
                     acc=self.accuracy
