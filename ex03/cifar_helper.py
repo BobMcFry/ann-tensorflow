@@ -1,4 +1,13 @@
 import os
+<<<<<<< HEAD
+import pickle
+import numpy as np
+
+class CIFAR():
+    def __init__(self, directory = "./"):
+        self._directory = directory
+        
+=======
 import numpy as np
 import pickle
 
@@ -38,7 +47,7 @@ class CIFAR():
                 else:
                     self._training_data = np.concatenate([self._training_data, imgs], axis = 0)
                     self._training_labels = np.concatenate([self._training_labels, cifar_data[b"labels"]])
-
+    
     def _load_test_data(self):
         path = os.path.join(self._directory, "test_batch")
         with open(path, 'rb') as fd:
@@ -60,6 +69,7 @@ class CIFAR():
         samples_n = labels.shape[0]
         if batch_size <= 0:
             batch_size = samples_n
+        
 
         random_indices = np.random.choice(samples_n, samples_n, replace = False)
         data = data[random_indices]
@@ -68,10 +78,10 @@ class CIFAR():
             on = i * batch_size
             off = on + batch_size
             yield data[on:off], labels[on:off]
-
-
+    
     def get_sizes(self):
         training_samples_n = self._training_labels.shape[0]
         validation_samples_n = self._validation_labels.shape[0]
         test_samples_n = self._test_labels.shape[0]
         return training_samples_n, validation_samples_n, test_samples_n
+
