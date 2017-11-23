@@ -12,7 +12,7 @@ do
 	        echo "Submitting: ${NAME}"
 	        echo "With ${OPTIMIZER}, ${LEARN_RATE}, ${BATCH_SIZE}"
 
-            CMD="python3 util.py -o ${OPTIMIZER} -l ${LEARN_RATE} -b ${BATCH_SIZE} -e 20 -f small_model.txt -m ex04.small_model -t ex04.exercise5"
+            CMD="python3 util.py -o ${OPTIMIZER} -l ${LEARN_RATE} -b ${BATCH_SIZE} -e 20 -f /home/student/r/rdiederichse/ann-tensorflow/small_model.txt -m ex04.small_model -t ex04.exercise5"
 
             SGE="#!/bin/bash\n\
                  cd /home/student/r/rdiederichse/ann-tensorflow\n\
