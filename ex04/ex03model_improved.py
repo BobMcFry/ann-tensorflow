@@ -17,8 +17,8 @@ class Model(BaseModel):
             labels})[0]
 
 
-    def __init__(self, learning_rate, optimizer, activation):
-        super().__init__(learning_rate, optimizer, activation)
+    def __init__(self, optimizer, activation):
+        super().__init__(optimizer, activation)
 
         ############################################################################
         #                             Define the graph                             #
@@ -53,9 +53,7 @@ class Model(BaseModel):
                                                                 labels=y_)
         mean_cross_entropy = tf.reduce_mean(cross_entropy)
         self.mean_cross_entropy = mean_cross_entropy
-        optimizer_obj = getattr(tf.train, optimizer + 'Optimizer')
-        train_step = optimizer_obj(
-            learning_rate=learning_rate).minimize(mean_cross_entropy)
+        train_step = optimizer.minimize(mean_cross_entropy)
         self.train_step = train_step
 
         # check if neuron firing strongest coincides with max value position in real

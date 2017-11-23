@@ -3,11 +3,9 @@ class BaseModel(object):
 
     Attributes
     ----------
-    lr  :   float
-            Learning rate for the optimizer
-    optimizer   :   str
+    opt   :   str
                     TF optimizer to use
-    activation  :   function
+    act_fn  :   function
                     tf.nn function for neuron activation
     '''
 
@@ -43,18 +41,17 @@ class BaseModel(object):
         '''
         pass
 
-    def __init__(self, learning_rate, optimizer, activation):
+    def __init__(self, optimizer, activation):
         '''Init new model
 
         Parameters
         ----------
         lr  :   float
                 Learning rate for the optimizer
-        optimizer   :   str
+        optimizer   :   tf.train.Optimizer
                         TF optimizer to use
         activation  :   function
                         tf.nn function for neuron activation
         '''
-        self.lr = learning_rate
         self.opt = optimizer
         self.act_fn = activation

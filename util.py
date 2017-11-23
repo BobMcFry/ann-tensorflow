@@ -49,12 +49,12 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
             tf.truncated_normal(
                 kshape,
                 stddev=0.1),
-            kshape)
+            kshape, name='kernels')
         bias_shape = (kshape[-1],)
         biases = tf.Variable(
             tf.truncated_normal(
                 bias_shape,
-                stddev=0.1))
+                stddev=0.1), name='bias')
         conv = tf.nn.conv2d(
             input,
             kernels,
@@ -232,9 +232,9 @@ class ParameterTest(object):
         save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
                 name=self.model.__class__.__name__,
                 batch=self.batch_size,
-                lr=self.model.lr,
+                lr=self.model.opt._learning_rate,
                 epochs=self.epochs,
-                opti=self.model.opt,
+                opti=self.model.opt.get_name(),
                 act=self.model.act_fn.__name__
         )
         self.accuracy = self.train_function(self.model, self.batch_size,
@@ -277,7 +277,9 @@ def main():
     train_fn = __import__(args.train, globals(), locals(),
             ['train_model']).train_model
 
-    model = model_cls(args.learning_rate, args.optimizer, tf.nn.relu)
+    optimizer_cls = getattr(tf.train, args.optimizer + 'Optimizer')
+    optimizer = optimizer_cls(args.learning_rate)
+    model = model_cls(optimizer, tf.nn.relu)
 
     pt = ParameterTest(model, args.batch_size, args.epochs, train_fn)
     pt.run()
