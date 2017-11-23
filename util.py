@@ -244,8 +244,8 @@ class ParameterTest(object):
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
                 'epochs={epochs:<5d}, accuracy={acc:4.3f}'.format(
-                    opti=self.model.opt,
-                    lr=self.model.lr,
+                    lr=self.model.opt._learning_rate,
+                    opti=self.model.opt.get_name(),
                     bs=self.batch_size,
                     epochs=self.epochs,
                     acc=self.accuracy
