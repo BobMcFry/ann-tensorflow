@@ -12,7 +12,8 @@ class Model(BaseModel):
         return entropy
 
     def get_accuracy(self, session, data, labels):
-        return session.run([self.accuracy], feed_dict={self.x: data, self.y_: labels})
+        return session.run([self.accuracy], feed_dict={self.x: data, self.y_:
+            labels})[0]
 
 
     def __init__(self, learning_rate, optimizer, activation):
