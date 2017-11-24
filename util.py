@@ -219,12 +219,14 @@ def inception2d(x, in_channels, filter_count):
 class ParameterTest(object):
     '''Test one set of parameters to the train() function.'''
     def __init__(self, model, batch_size, epochs,
-            train_function):
+            train_function, learning_rate):
         self.model = model
         self.batch_size = batch_size
         self.epochs = epochs
         self.accuracy = None
         self.train_function=train_function
+        # sadly, we cannot always retrieve this from any optimizer
+        self.learning_rate = learning_rate
 
     def run(self):
         '''Run the training process with the specified settings.'''
@@ -232,7 +234,7 @@ class ParameterTest(object):
         save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
                 name=self.model.__class__.__name__,
                 batch=self.batch_size,
-                lr=self.model.opt._learning_rate,
+                lr=self.learning_rate,
                 epochs=self.epochs,
                 opti=self.model.opt.get_name(),
                 act=self.model.act_fn.__name__
@@ -281,7 +283,8 @@ def main():
     optimizer = optimizer_cls(args.learning_rate)
     model = model_cls(optimizer, tf.nn.relu)
 
-    pt = ParameterTest(model, args.batch_size, args.epochs, train_fn)
+    pt = ParameterTest(model, args.batch_size, args.epochs,
+            train_fnargs.learning_rate)
     pt.run()
     print(pt)
     # the OS ensures sequential writes with concurrent processes

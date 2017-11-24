@@ -54,9 +54,9 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                     training_step += 1
 
                     # stop early if convergence too slow
-                    # if epoch == 1:
-                    #     if val_accuracy < 0.2:
-                    #         raise RuntimeError('This isn\'t going anywhere.')
+                    if epoch == 1:
+                        if val_accuracy < 0.2:
+                            raise RuntimeError('This isn\'t going anywhere.')
 
             if training_step % record_step == 1:
                 # we just recorded, final_accuracy already correct
