@@ -53,8 +53,8 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
 
                         # save if better
                         if val_accuracy > best_accuracy:
-                            print('Saving model.')
                             best_accuracy = val_accuracy
+                            print('Saving model with accuracy %f.' % val_accuracy)
                             saver.save(sess, save_fname)
 
                     training_step += 1

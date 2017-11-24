@@ -1,4 +1,5 @@
-from util import conv_layer, fully_connected, weighted_pool_layer, inception2d
+from util import (conv_layer, fully_connected, weighted_pool_layer,
+        batch_norm_layer)
 from model import BaseModel
 import tensorflow as tf
 
@@ -25,6 +26,9 @@ class Model(BaseModel):
         # It turns out that this network from ex03 is already capable of memorizing
         # the entire training or validation set, so we need to tweak generalization,
         # not capacity
+        # In order to speed up convergence, we added batch normalization.
+        # Our best effort was Adam optimizer with bs=32, lr=0.001 (only possible
+        # because of norm)
         x = tf.placeholder(tf.float32, shape=(None, 32, 32, 1), name='input')
         y_ = tf.placeholder(dtype=tf.int32, shape=(None,), name='labels')
 
@@ -34,15 +38,19 @@ class Model(BaseModel):
         kernel_shape1 = (8, 8, 1, 8)
         activation1 = conv_layer(x, kernel_shape1, activation=activation)
 
+        normalize1 = batch_norm_layer(activation1)
+
         pool1 = weighted_pool_layer(
-            activation1, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1)
+            normalize1, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1)
         )
 
         kernel_shape2 = (3, 3, 8, 10)
         activation2 = conv_layer(pool1, kernel_shape2, activation=activation)
 
+        normalize2 = batch_norm_layer(activation2)
+
         pool2 = weighted_pool_layer(
-            activation2, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1)
+            normalize2, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1)
         )
 
         pool2_reshaped = tf.reshape(pool2, (-1, 8*8*10), name='reshaped1')
