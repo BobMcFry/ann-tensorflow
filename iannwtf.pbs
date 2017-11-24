@@ -1,10 +1,10 @@
 #!/bin/bash
 
-for OPTIMIZER in GradientDescent Adelta Adagrad Adam RMSProp
+for OPTIMIZER in Ftrl ProximalGradientDescent Adelta Adagrad Adam RMSProp
 do
     for LEARN_RATE in 0.0001 0.001 0.01 0.1
     do
-        for BATCH_SIZE in 100 500 1000 3000
+        for BATCH_SIZE in 32 64 256 512
         do
 
             #!!! Job name must be < 15 characters, first one must be alphabetic
