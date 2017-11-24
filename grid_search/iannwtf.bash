@@ -29,7 +29,7 @@ sge() # (opti, lr, bs, name)
         export PATH=\$PATH:/net/store/cv/projects/software/conda/bin\n\
         source activate rdiederichse-env\n\
         ${CMD}"
-    
+
     echo -e ${SGE} | qsub -l mem=4G -l cuda=1 -N ${NAME}
 }
 
@@ -58,9 +58,9 @@ pbs()
 }
 
 
-for OPTIMIZER in Adelta Adagrad Adam RMSProp
+for OPTIMIZER in Adadelta Adagrad Adam RMSProp
 do
-    for LEARN_RATE in 0.0001 0.001 0.01 
+    for LEARN_RATE in 0.0001 0.001 0.01
     do
         for BATCH_SIZE in 32 64 128 256
         do
