@@ -8,6 +8,16 @@ SEED = 5
 np.random.seed(SEED)
 tf.set_random_seed(SEED)
 
+norm_n = 0
+
+
+def batch_norm_layer(input):
+    global norm_n
+    norm_n += 1
+    with tf.variable_scope('norm%d' % norm_n):
+        mean, var = tf.nn.moments(input, axes=[0, 1, 1])
+        return tf.nn.batch_normalization(input, mean, var, 0, 1, 1e-10)
+
 pool_n = 0
 
 
@@ -64,7 +74,6 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
         return activation(tf.nn.tanh(conv + biases, name='activation'))
 
 
-# counter for autmatically creating fully-connected layer variable names
 fc_n = 0
 
 
@@ -108,35 +117,8 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
         else:
             return drive
 
-# counter for autmatically creating fully-connected layer variable names
-bn_n = 0
 
 
-def batch_normalization_layer(input_layer, dimension):
-    '''Helper function to do batch normalziation
-
-    Parameters
-    ----------
-    input_layer :   tf.Tensor
-                    4D tensor
-    dimension   :   int
-                    input_layer.get_shape().as_list()[-1]. The depth of the 4D tensor
-    Returns
-    -------
-    tf.Tensor
-           Tthe 4D tensor after being normalized
-    '''
-    global bn_n
-    bn_n += 1
-    with tf.variable_scope('batch_norm%d' % bn_n):
-        mean, variance = tf.nn.moments(input_layer, axes=[0, 1, 2])
-        # normalise by mean and variance, and use no offset or scaling (0, 1)
-        bn_layer = tf.nn.batch_normalization(input_layer, mean, variance, None,
-                None, 0.001)
-
-        return bn_layer
-
-# counter for autmatically creating fully-connected layer variable names
 weighted_pool_n = 0
 
 
