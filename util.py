@@ -284,7 +284,7 @@ def main():
     model = model_cls(optimizer, tf.nn.relu)
 
     pt = ParameterTest(model, args.batch_size, args.epochs,
-            train_fnargs.learning_rate)
+            train_fn, args.learning_rate)
     pt.run()
     print(pt)
     # the OS ensures sequential writes with concurrent processes
