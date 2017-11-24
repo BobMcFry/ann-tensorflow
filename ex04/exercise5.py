@@ -4,7 +4,13 @@ import os
 
 def train_model(model, batch_size, epochs, save_fname, return_records=False,
         record_step=20):
-    '''Train a model on the SVHN dataset.'''
+    '''Train a model on the SVHN dataset.
+
+    Returns
+    -------
+    float
+        the best validation accuracy found
+    '''
 
     svhn = SVHN()
 
@@ -70,5 +76,5 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
             if return_records:
                 return entropies, accuracies
             else:
-                return final_accuracy
+                return best_accuracy
 
