@@ -42,6 +42,20 @@ class BaseModel(object):
         pass
 
     def predict(self, session, data):
+        '''Get model predictions for data.
+
+        Parameters
+        ----------
+        session :   tf.Session
+        data    :   np.ndarray
+                    Must fit the model's input placeholder
+
+        Returns
+        -------
+        np.ndarray
+            Array of which output neuron is most active for each input
+
+        '''
         pass
 
     def __init__(self, optimizer, activation):
