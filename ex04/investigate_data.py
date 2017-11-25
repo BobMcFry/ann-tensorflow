@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 def print_statistics():
     ############################################################################
     #                         Print class distribution                         #
-    ########### #################################################################
+    ############################################################################
     print('Percentage of labels in train and validation set')
     train_labels = svhn._training_labels
     validation_labels = svhn._validation_labels
