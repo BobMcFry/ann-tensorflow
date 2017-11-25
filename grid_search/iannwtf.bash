@@ -71,7 +71,7 @@ do
                 shell) shell $OPTIMIZER $LEARN_RATE $BATCH_SIZE;;
                 pbs) pbs $OPTIMIZER $LEARN_RATE $BATCH_SIZE $NAME;;
                 sge) sge $OPTIMIZER $LEARN_RATE $BATCH_SIZE $NAME;;
-                *) echo "Unknown command '$1'."; exit 1
+                *) echo "Unknown command '$1'."; echo "Usage: $0 {shell, sge, pbs}"; exit 1
             esac
             sleep 1
         done
