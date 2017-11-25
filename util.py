@@ -213,7 +213,7 @@ class ParameterTest(object):
     def run(self):
         '''Run the training process with the specified settings.'''
 
-        save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
+        save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
                 name=self.model.__class__.__name__,
                 batch=self.batch_size,
                 lr=self.learning_rate,
