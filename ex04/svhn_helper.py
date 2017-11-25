@@ -23,14 +23,14 @@ class SVHN():
         self._validation_labels = self._training_labels[random_indices]
         self._training_data = np.delete(self._training_data, random_indices, axis = 0)
         self._training_labels = np.delete(self._training_labels, random_indices)
-
-
-    def _load_traing_data(self):
-        training_data, training_labels = self._load_data("train_32x32.mat")
-
+        ########################################################################
+        #                            Stuff we tried                            #
+        ########################################################################
+        # 1.
         # simple mean-variance normalization doesn't add anything in face of
         # batch norm layers
         # training_data = (training_data - np.mean(training_data)) / np.var(training_data)
+        # 2. Add data with random brightness and constrast
         # n = training_data.shape[0]
         # import tensorflow as tf
         # with tf.Session().as_default():
@@ -43,10 +43,22 @@ class SVHN():
         # training_labels = np.concatenate((training_labels,
         #     training_labels[:n//2],
         #     training_labels[n//2:]))
-        # __import__('ipdb').set_trace()
-        # inverted_train_data = training_data[:10000] - np.max(training_data[:10000], axis=(1,2,3))
-        # training_data[:, :, :10] = 128
-        training_data[:, :, 32-10:] = 128
+
+        # 3. Invert the training data so we don't get issues with white on
+        # black.
+        # inverted_train_data = np.zeros((10000, 32, 32, 1))
+        # maxima = np.max(self._training_data[:10000], axis=(1,2,3))
+        # inverted_train_data = np.subtract(maxima[:, np.newaxis, np.newaxis, np.newaxis], self._training_data[:10000],
+        #     inverted_train_data)
+        # self._training_data = np.concatenate((self._training_data,
+        #     inverted_train_data))
+        # self._training_labels = np.concatenate((self._training_labels,
+        #     self._training_labels[:10000]))
+
+
+    def _load_traing_data(self):
+        training_data, training_labels = self._load_data("train_32x32.mat")
+
         self._training_data = training_data
         self._training_labels = training_labels
 
