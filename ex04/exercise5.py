@@ -7,10 +7,32 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
         record_step=20, ignore_saved=False):
     '''Train a model on the SVHN dataset.
 
+    Parameters
+    ----------
+    model           :   Model (defined above)
+                        The training model.
+    batch_size      :   int
+                        Size of training batch.
+    epochs          :   int
+                        Number of times to visit the entire training set.
+    save_fname      :   string
+                        The filename of the file carrying all the learned
+                        variables.
+    return_records  :   bool
+                        Determines whether only the final accuracy (False) or a
+                        history of all entropies and accuracies is returned.
+    record_step     :   int
+                        Accuracy on test set will be recorded every
+                        ``record_step`` training steps.
+    ignore_saved    :   bool
+                        Do not load saved weights, if found
+
     Returns
     -------
-    float
-        the best validation accuracy found
+    float OR tuple
+            If ``return_records`` is set, all entropies and accuracies are
+            returned. Else the best accuracy is returned.
+
     '''
 
     svhn = SVHN()
