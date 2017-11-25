@@ -41,6 +41,9 @@ class BaseModel(object):
         '''
         pass
 
+    def predict(self, session, data):
+        pass
+
     def __init__(self, optimizer, activation):
         '''Init new model
 

@@ -28,6 +28,9 @@ class SVHN():
     def _load_traing_data(self):
         training_data, training_labels = self._load_data("train_32x32.mat")
 
+        # simple mean-variance normalization doesn't add anything in face of
+        # batch norm layers
+        # training_data = (training_data - np.mean(training_data)) / np.var(training_data)
         # n = training_data.shape[0]
         # import tensorflow as tf
         # with tf.Session().as_default():
@@ -40,6 +43,10 @@ class SVHN():
         # training_labels = np.concatenate((training_labels,
         #     training_labels[:n//2],
         #     training_labels[n//2:]))
+        # __import__('ipdb').set_trace()
+        # inverted_train_data = training_data[:10000] - np.max(training_data[:10000], axis=(1,2,3))
+        # training_data[:, :, :10] = 128
+        training_data[:, :, 32-10:] = 128
         self._training_data = training_data
         self._training_labels = training_labels
 

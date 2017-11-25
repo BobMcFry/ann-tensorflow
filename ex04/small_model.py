@@ -2,9 +2,14 @@ from util import (conv_layer, fully_connected, weighted_pool_layer,
         batch_norm_layer)
 from model import BaseModel
 import tensorflow as tf
+import numpy as np
 
 class Model(BaseModel):
     '''Smaller model so we clock in at < 4mb'''
+
+    def predict(self, session, data):
+        return session.run([self.prediction], feed_dict={self.x: data,
+            self.y_: np.zeros(data.shape[0])})[0]
 
     def run_training_step(self, session, data, labels):
         entropy, _ = session.run(
@@ -65,10 +70,11 @@ class Model(BaseModel):
         self.mean_cross_entropy = mean_cross_entropy
         train_step = optimizer.minimize(mean_cross_entropy)
         self.train_step = train_step
+        self.prediction = tf.argmax(fc2_logit, 1, output_type=tf.int32)
 
         # check if neuron firing strongest coincides with max value position in real
         # labels
-        correct_prediction = tf.equal(tf.argmax(fc2_logit, 1, output_type=tf.int32), y_)
+        correct_prediction = tf.equal(self.prediction, y_)
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         self.accuracy = accuracy
 

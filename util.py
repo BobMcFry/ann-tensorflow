@@ -3,6 +3,7 @@ import argparse
 import importlib
 import tensorflow as tf
 import numpy as np
+from ex04.svhn_helper import SVHN
 
 SEED = 5
 np.random.seed(SEED)
@@ -214,7 +215,7 @@ class ParameterTest(object):
     def run(self):
         '''Run the training process with the specified settings.'''
 
-        save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
+        self.save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
                 name=self.model.__class__.__name__,
                 batch=self.batch_size,
                 lr=self.learning_rate,
@@ -223,7 +224,7 @@ class ParameterTest(object):
                 act=self.model.act_fn.__name__
         )
         self.accuracy = self.train_function(self.model, self.batch_size,
-                self.epochs, save_fname, return_records=False,
+                self.epochs, self.save_fname, return_records=False,
                 record_step=30, ignore_saved=self.ignore_saved)
 
     def __str__(self):
@@ -276,6 +277,11 @@ def main():
     with open(args.file, 'a') as f:
         f.write(str(pt) + '\n')
         f.flush()
+
+    # from ex04.investigate_data import plot_mispredictions
+    # svhn = SVHN()
+    # plot_mispredictions(model, pt.save_fname, svhn._validation_data,
+    #         svhn._validation_labels)
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,7 @@
 import tensorflow as tf
 from .svhn_helper import SVHN
 import os
+import numpy as np
 
 def train_model(model, batch_size, epochs, save_fname, return_records=False,
         record_step=20, ignore_saved=False):
@@ -21,6 +22,9 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
 
     with tf.Session() as sess:
 
+        ########################################################################
+        #                             Load weights                             #
+        ########################################################################
         saver = tf.train.Saver()
         if not ignore_saved and os.path.exists(save_fname + '.meta'):
             print('Using saved weights.')
@@ -29,6 +33,9 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                                 svhn._validation_labels)
             return final_accuracy
         else:
+            ####################################################################
+            #                             Training                             #
+            ####################################################################
             sess.run(tf.global_variables_initializer())
 
             # number of training steps
@@ -64,6 +71,9 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                         if val_accuracy < 0.2:
                             raise RuntimeError('This isn\'t going anywhere.')
 
+            ####################################################################
+            #               Make final recordings, if necessary                #
+            ####################################################################
             if training_step % record_step == 1:
                 # we just recorded, final_accuracy already correct
                 pass
@@ -73,6 +83,9 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
                                     svhn._validation_labels)
                 accuracies.append(final_accuracy)
 
+            ####################################################################
+            #                     Print misclassifications                     #
+            ####################################################################
             if return_records:
                 return entropies, accuracies
             else:
