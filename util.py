@@ -201,7 +201,7 @@ def inception2d(x, in_channels, filter_count):
 class ParameterTest(object):
     '''Test one set of parameters to the train() function.'''
     def __init__(self, model, batch_size, epochs,
-            train_function, learning_rate):
+            train_function, learning_rate, ignore_saved):
         self.model = model
         self.batch_size = batch_size
         self.epochs = epochs
@@ -209,6 +209,7 @@ class ParameterTest(object):
         self.train_function=train_function
         # sadly, we cannot always retrieve this from any optimizer
         self.learning_rate = learning_rate
+        self.ignore_saved = ignore_saved
 
     def run(self):
         '''Run the training process with the specified settings.'''
@@ -223,7 +224,7 @@ class ParameterTest(object):
         )
         self.accuracy = self.train_function(self.model, self.batch_size,
                 self.epochs, save_fname, return_records=False,
-                record_step=30)
+                record_step=30, ignore_saved=self.ignore_saved)
 
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
@@ -255,6 +256,8 @@ def main():
             help='Package path where Model class is located')
     parser.add_argument('-t', '--train', required=True, type=str,
             help='Module to search for train_model() function.')
+    parser.add_argument('-i', '--ignore-saved', action='store_true',
+            help='Ignore any saved weights.')
 
     args = parser.parse_args()
     model_cls = __import__(args.model, globals(), locals(), ['Model']).Model
@@ -266,7 +269,7 @@ def main():
     model = model_cls(optimizer, tf.nn.relu)
 
     pt = ParameterTest(model, args.batch_size, args.epochs,
-            train_fn, args.learning_rate)
+            train_fn, args.learning_rate, args.ignore_saved)
     pt.run()
     print(pt)
     # the OS ensures sequential writes with concurrent processes

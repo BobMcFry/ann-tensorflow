@@ -3,7 +3,7 @@ from .svhn_helper import SVHN
 import os
 
 def train_model(model, batch_size, epochs, save_fname, return_records=False,
-        record_step=20):
+        record_step=20, ignore_saved=False):
     '''Train a model on the SVHN dataset.
 
     Returns
@@ -22,7 +22,7 @@ def train_model(model, batch_size, epochs, save_fname, return_records=False,
     with tf.Session() as sess:
 
         saver = tf.train.Saver()
-        if os.path.exists(save_fname + '.meta'):
+        if not ignore_saved and os.path.exists(save_fname + '.meta'):
             print('Using saved weights.')
             saver.restore(sess, save_fname)
             final_accuracy = model.get_accuracy(sess, svhn._validation_data,
