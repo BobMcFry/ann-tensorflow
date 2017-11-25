@@ -13,6 +13,7 @@ norm_n = 0
 
 
 def batch_norm_layer(input):
+    '''Create a layer that normalizes the batch with it's mean and variance.'''
     global norm_n
     norm_n += 1
     with tf.variable_scope('norm%d' % norm_n):
