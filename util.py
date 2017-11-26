@@ -33,7 +33,8 @@ def max_pool_layer(input, ksize, strides):
 conv_n = 0
 
 
-def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
+def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
+        use_bias=True, padding='SAME'):
     '''Create a convolutional layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -55,6 +56,12 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
     '''
     global conv_n
     conv_n += 1
+    # Xavier initilisation
+    # (fan_in, fan_out) = kshape[1:2]
+    # low = -1*np.sqrt(6.0/(fan_in + fan_out)) # use 4 for sigmoid, 1 for tanh activation
+    # high = 1*np.sqrt(6.0/(fan_in + fan_out))
+    #         kernels = tf.Variable(tf.random_uniform(kshape, minval=low, maxval=high,
+    #             dtype=tf.float32), name='kernels')
     # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
         kernels = tf.Variable(
@@ -62,24 +69,31 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
                 kshape,
                 stddev=0.1),
             kshape, name='kernels')
-        bias_shape = (kshape[-1],)
-        biases = tf.Variable(
-            tf.truncated_normal(
-                bias_shape,
-                stddev=0.1), name='bias')
+        if use_bias:
+            bias_shape = (kshape[-1],)
+            biases = tf.Variable(
+                tf.truncated_normal(
+                    bias_shape,
+                    stddev=0.1), name='bias')
         conv = tf.nn.conv2d(
             input,
             kernels,
             strides,
-            padding='SAME',
+            padding=padding,
             name='conv')
-        return activation(tf.nn.tanh(conv + biases, name='activation'))
+        if not activation:
+            activation = tf.identity
+        if use_bias:
+            return activation(conv + biases, name='activation')
+        else:
+            return activation(conv, name='activation')
 
 
 fc_n = 0
 
 
-def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
+def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh,
+        use_bias=True):
     '''Create a fully connected layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -105,15 +119,20 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
     global fc_n
     fc_n += 1
     with tf.variable_scope('fully%d' % fc_n):
-        init = tf.truncated_normal_initializer(stddev=0.1)
+        init_W = tf.truncated_normal_initializer(stddev=0.1)
+        init_b = tf.constant_initializer(0.1)
         W = tf.get_variable(
                 'weights',
-                initializer=init,
+                initializer=init_W,
                 shape=(input.shape[-1], n_out), # the last dim of the input
                dtype=tf.float32                 # is the 1st dim of the weights
             )
-        bias = tf.get_variable('bias', initializer=init, shape=(n_out,))
-        drive = tf.matmul(input, W) + bias
+        if use_bias:
+            bias = tf.get_variable('bias', initializer=init_b, shape=(n_out,))
+        if use_bias:
+            drive = tf.matmul(input, W) + bias
+        else:
+            drive = tf.matmul(input, W)
         if with_activation:
             return activation(drive)
         else:
