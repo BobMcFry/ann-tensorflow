@@ -70,7 +70,7 @@ class Model(BaseModel):
         self.mean_cross_entropy = mean_cross_entropy
         train_step = optimizer.minimize(mean_cross_entropy)
         self.train_step = train_step
-        self.prediction = tf.argmax(fc2_logit, 1, output_type=tf.int32)
+        self.prediction = tf.cast(tf.argmax(fc2_logit, 1), tf.int32)
 
         # check if neuron firing strongest coincides with max value position in real
         # labels
