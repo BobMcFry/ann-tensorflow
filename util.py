@@ -56,25 +56,17 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
     '''
     global conv_n
     conv_n += 1
-    # Xavier initilisation
-    # (fan_in, fan_out) = kshape[1:2]
-    # low = -1*np.sqrt(6.0/(fan_in + fan_out)) # use 4 for sigmoid, 1 for tanh activation
-    # high = 1*np.sqrt(6.0/(fan_in + fan_out))
-    #         kernels = tf.Variable(tf.random_uniform(kshape, minval=low, maxval=high,
-    #             dtype=tf.float32), name='kernels')
     # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
-        kernels = tf.Variable(
-            tf.truncated_normal(
-                kshape,
-                stddev=0.1),
-            kshape, name='kernels')
+        # Xavier initialisation
+        (fan_in, fan_out) = kshape[1:3]
+        low = -1*np.sqrt(6.0/(fan_in + fan_out)) # use 4 for sigmoid, 1 for tanh activation
+        high = 1*np.sqrt(6.0/(fan_in + fan_out))
+        kernels = tf.Variable(tf.random_uniform(kshape, minval=low, maxval=high,
+            dtype=tf.float32), name='kernels')
         if use_bias:
             bias_shape = (kshape[-1],)
-            biases = tf.Variable(
-                tf.truncated_normal(
-                    bias_shape,
-                    stddev=0.1), name='bias')
+            biases = tf.Variable(tf.constant(0.1), name='bias')
         conv = tf.nn.conv2d(
             input,
             kernels,
