@@ -35,7 +35,7 @@ sge() # (opti, lr, bs, name)
 
 pbs()
 {
-    NAME=$4
+    NAME=`echo $4 | cut -c -14`
     CMD="python3 util.py -o $1 -l $2 -b $3 -e 20 -f\
         /home/student/r/rdiederichse/ann-tensorflow/$LOGFILE -m $MODEL_MODULE -t\
         $TRAIN_FN_MODULE"
