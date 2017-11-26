@@ -40,7 +40,7 @@ class Model(BaseModel):
         self.x = x
         self.y_ = y_
 
-        kernel_shape1 = (8, 8, 1, 8)
+        kernel_shape1 = (5, 5, 1, 8)
         activation1 = conv_layer(x, kernel_shape1, activation=activation)
 
         normalize1 = batch_norm_layer(activation1)

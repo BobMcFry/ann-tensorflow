@@ -216,14 +216,15 @@ class ParameterTest(object):
     def run(self):
         '''Run the training process with the specified settings.'''
 
-        self.save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
-                name=self.model.__class__.__name__,
-                batch=self.batch_size,
-                lr=self.learning_rate,
-                epochs=self.epochs,
-                opti=self.model.opt.get_name(),
-                act=self.model.act_fn.__name__
-        )
+        # self.save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
+        #         name=self.model.__class__.__name__,
+        #         batch=self.batch_size,
+        #         lr=self.learning_rate,
+        #         epochs=self.epochs,
+        #         opti=self.model.opt.get_name(),
+        #         act=self.model.act_fn.__name__
+        # )
+        self.save_fname = 'weights'     # use this for the competition
         self.accuracy = self.train_function(self.model, self.batch_size,
                 self.epochs, self.save_fname, return_records=False,
                 record_step=30, ignore_saved=self.ignore_saved)
