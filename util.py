@@ -9,11 +9,30 @@ SEED = 5
 np.random.seed(SEED)
 tf.set_random_seed(SEED)
 
+weights_n = 0
+
+def get_weights_and_bias(shape, shape_b=None, dtype=tf.float32,
+        initializer_w=tf.random_uniform_initializer(-1.0, 1.0),
+        initializer_b=tf.zeros_initializer()):
+    if not shape_b:
+        shape_b = shape[-1:]
+
+    global weights_n
+
+    weights_n += 1
+    with tf.variable_scope('weights%d' % weights_n):
+        return (
+                tf.get_variable('W', initializer=initializer_w,
+                                shape=shape, dtype=dtype),
+                tf.get_variable('b', shape=shape_b, initializer=initializer_b)
+                )
+
+
 norm_n = 0
 
 
 def batch_norm_layer(input):
-    '''Create a layer that normalizes the batch with it's mean and variance.'''
+    '''Create a layer that normalizes the batch with its mean and variance.'''
     global norm_n
     norm_n += 1
     with tf.variable_scope('norm%d' % norm_n):
@@ -251,6 +270,8 @@ class ParameterTest(object):
                 )
         )
 
+def get_optimizer(name):
+    return getattr(tf.train, name + 'Optimizer')
 
 def main():
     tf_optimizers = {class_name[:-len('Optimizer')] for class_name in dir(tf.train) if 'Optimizer'
@@ -278,7 +299,7 @@ def main():
     train_fn = __import__(args.train, globals(), locals(),
             ['train_model']).train_model
 
-    optimizer_cls = getattr(tf.train, args.optimizer + 'Optimizer')
+    optimizer_cls = get_optimizer(args.optimizer)
     optimizer = optimizer_cls(args.learning_rate)
     model = model_cls(optimizer, tf.nn.relu)
 
