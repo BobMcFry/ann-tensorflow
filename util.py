@@ -3,10 +3,41 @@ import argparse
 import importlib
 import tensorflow as tf
 import numpy as np
+from ex04.svhn_helper import SVHN
 
 SEED = 5
 np.random.seed(SEED)
 tf.set_random_seed(SEED)
+
+weights_n = 0
+
+def get_weights_and_bias(shape, shape_b=None, dtype=tf.float32,
+        initializer_w=tf.random_uniform_initializer(-1.0, 1.0),
+        initializer_b=tf.zeros_initializer()):
+    if not shape_b:
+        shape_b = shape[-1:]
+
+    global weights_n
+
+    weights_n += 1
+    with tf.variable_scope('weights%d' % weights_n):
+        return (
+                tf.get_variable('W', initializer=initializer_w,
+                                shape=shape, dtype=dtype),
+                tf.get_variable('b', shape=shape_b, initializer=initializer_b)
+                )
+
+
+norm_n = 0
+
+
+def batch_norm_layer(input):
+    '''Create a layer that normalizes the batch with its mean and variance.'''
+    global norm_n
+    norm_n += 1
+    with tf.variable_scope('norm%d' % norm_n):
+        mean, var = tf.nn.moments(input, axes=[0, 1, 1])
+        return tf.nn.batch_normalization(input, mean, var, 0, 1, 1e-10)
 
 pool_n = 0
 
@@ -21,7 +52,8 @@ def max_pool_layer(input, ksize, strides):
 conv_n = 0
 
 
-def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
+def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
+        use_bias=True, padding='SAME'):
     '''Create a convolutional layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -45,30 +77,34 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh):
     conv_n += 1
     # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
-        kernels = tf.Variable(
-            tf.truncated_normal(
-                kshape,
-                stddev=0.1),
-            kshape, name='kernels')
-        bias_shape = (kshape[-1],)
-        biases = tf.Variable(
-            tf.truncated_normal(
-                bias_shape,
-                stddev=0.1), name='bias')
+        # Xavier initialisation
+        (fan_in, fan_out) = kshape[1:3]
+        low = -1*np.sqrt(6.0/(fan_in + fan_out)) # use 4 for sigmoid, 1 for tanh activation
+        high = 1*np.sqrt(6.0/(fan_in + fan_out))
+        kernels = tf.Variable(tf.random_uniform(kshape, minval=low, maxval=high,
+            dtype=tf.float32), name='kernels')
+        if use_bias:
+            bias_shape = (kshape[-1],)
+            biases = tf.Variable(tf.constant(0.1), name='bias')
         conv = tf.nn.conv2d(
             input,
             kernels,
             strides,
-            padding='SAME',
+            padding=padding,
             name='conv')
-        return activation(tf.nn.tanh(conv + biases, name='activation'))
+        if not activation:
+            activation = tf.identity
+        if use_bias:
+            return activation(conv + biases, name='activation')
+        else:
+            return activation(conv, name='activation')
 
 
-# counter for autmatically creating fully-connected layer variable names
 fc_n = 0
 
 
-def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
+def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh,
+        use_bias=True):
     '''Create a fully connected layer with fixed activation function and variable
     initialisation. The activation function is ``tf.nn.tanh`` and variables are
     initialised from a truncated normal distribution with an stddev of 0.1
@@ -94,49 +130,27 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh):
     global fc_n
     fc_n += 1
     with tf.variable_scope('fully%d' % fc_n):
-        init = tf.truncated_normal_initializer(stddev=0.1)
+        init_W = tf.truncated_normal_initializer(stddev=0.1)
+        init_b = tf.constant_initializer(0.1)
         W = tf.get_variable(
                 'weights',
-                initializer=init,
+                initializer=init_W,
                 shape=(input.shape[-1], n_out), # the last dim of the input
                dtype=tf.float32                 # is the 1st dim of the weights
             )
-        bias = tf.get_variable('bias', initializer=init, shape=(n_out,))
-        drive = tf.matmul(input, W) + bias
+        if use_bias:
+            bias = tf.get_variable('bias', initializer=init_b, shape=(n_out,))
+        if use_bias:
+            drive = tf.matmul(input, W) + bias
+        else:
+            drive = tf.matmul(input, W)
         if with_activation:
             return activation(drive)
         else:
             return drive
 
-# counter for autmatically creating fully-connected layer variable names
-bn_n = 0
 
 
-def batch_normalization_layer(input_layer, dimension):
-    '''Helper function to do batch normalziation
-
-    Parameters
-    ----------
-    input_layer :   tf.Tensor
-                    4D tensor
-    dimension   :   int
-                    input_layer.get_shape().as_list()[-1]. The depth of the 4D tensor
-    Returns
-    -------
-    tf.Tensor
-           Tthe 4D tensor after being normalized
-    '''
-    global bn_n
-    bn_n += 1
-    with tf.variable_scope('batch_norm%d' % bn_n):
-        mean, variance = tf.nn.moments(input_layer, axes=[0, 1, 2])
-        # normalise by mean and variance, and use no offset or scaling (0, 1)
-        bn_layer = tf.nn.batch_normalization(input_layer, mean, variance, None,
-                None, 0.001)
-
-        return bn_layer
-
-# counter for autmatically creating fully-connected layer variable names
 weighted_pool_n = 0
 
 
@@ -219,39 +233,45 @@ def inception2d(x, in_channels, filter_count):
 class ParameterTest(object):
     '''Test one set of parameters to the train() function.'''
     def __init__(self, model, batch_size, epochs,
-            train_function):
+            train_function, learning_rate, ignore_saved):
         self.model = model
         self.batch_size = batch_size
         self.epochs = epochs
         self.accuracy = None
         self.train_function=train_function
+        # sadly, we cannot always retrieve this from any optimizer
+        self.learning_rate = learning_rate
+        self.ignore_saved = ignore_saved
 
     def run(self):
         '''Run the training process with the specified settings.'''
 
-        save_fname = '{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
-                name=self.model.__class__.__name__,
-                batch=self.batch_size,
-                lr=self.model.opt._learning_rate,
-                epochs=self.epochs,
-                opti=self.model.opt.get_name(),
-                act=self.model.act_fn.__name__
-        )
+        # self.save_fname = 'checkpoints/{name}_{batch}_{lr}_{epochs}_{opti}_{act}.ckpt'.format(
+        #         name=self.model.__class__.__name__,
+        #         batch=self.batch_size,
+        #         lr=self.learning_rate,
+        #         epochs=self.epochs,
+        #         opti=self.model.opt.get_name(),
+        #         act=self.model.act_fn.__name__
+        # )
+        self.save_fname = 'weights'     # use this for the competition
         self.accuracy = self.train_function(self.model, self.batch_size,
-                self.epochs, save_fname, return_records=False,
-                record_step=30)
+                self.epochs, self.save_fname, return_records=False,
+                record_step=30, ignore_saved=self.ignore_saved)
 
     def __str__(self):
         return ('{opti:30}, learning rate={lr:5.4f}, batch size={bs:<5d}, '
                 'epochs={epochs:<5d}, accuracy={acc:4.3f}'.format(
-                    opti=self.model.opt,
-                    lr=self.model.lr,
+                    lr=self.learning_rate,
+                    opti=self.model.opt.get_name(),
                     bs=self.batch_size,
                     epochs=self.epochs,
                     acc=self.accuracy
                 )
         )
 
+def get_optimizer(name):
+    return getattr(tf.train, name + 'Optimizer')
 
 def main():
     tf_optimizers = {class_name[:-len('Optimizer')] for class_name in dir(tf.train) if 'Optimizer'
@@ -271,23 +291,31 @@ def main():
             help='Package path where Model class is located')
     parser.add_argument('-t', '--train', required=True, type=str,
             help='Module to search for train_model() function.')
+    parser.add_argument('-i', '--ignore-saved', action='store_true',
+            help='Ignore any saved weights.')
 
     args = parser.parse_args()
     model_cls = __import__(args.model, globals(), locals(), ['Model']).Model
     train_fn = __import__(args.train, globals(), locals(),
             ['train_model']).train_model
 
-    optimizer_cls = getattr(tf.train, args.optimizer + 'Optimizer')
+    optimizer_cls = get_optimizer(args.optimizer)
     optimizer = optimizer_cls(args.learning_rate)
     model = model_cls(optimizer, tf.nn.relu)
 
-    pt = ParameterTest(model, args.batch_size, args.epochs, train_fn)
+    pt = ParameterTest(model, args.batch_size, args.epochs,
+            train_fn, args.learning_rate, args.ignore_saved)
     pt.run()
     print(pt)
     # the OS ensures sequential writes with concurrent processes
     with open(args.file, 'a') as f:
         f.write(str(pt) + '\n')
         f.flush()
+
+    # from ex04.investigate_data import plot_mispredictions
+    # svhn = SVHN()
+    # plot_mispredictions(model, pt.save_fname, svhn._validation_data,
+    #         svhn._validation_labels)
 
 if __name__ == '__main__':
     main()
