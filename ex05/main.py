@@ -115,6 +115,11 @@ class SkipGramModel(object):
         # itself.
         self.closest_words = tf.nn.top_k(self.similarity, 8).indices[:, 1:]
 
+    def save(self, session):
+        '''Save the model.'''
+        saver = tf.train.Saver()
+        saver.save(session, './skip-gram.ckpt')
+
 
     def run_training_step(self, session, inputs, labels):
         '''Run one training step.
@@ -186,7 +191,7 @@ def main():
                 closest_words = ' '.join(book.ids2words(closest[idx, :]))
                 word_id = book.ids2words(word)
                 print(f'Closest for {word_id}: {closest_words}')
-
+        model.save(session)
 
 if __name__ == '__main__':
     main()
