@@ -1,0 +1,36 @@
+#!/bin/bash
+
+for OPTIMIZER in Ftrl ProximalGradientDescent Adelta Adagrad Adam RMSProp
+do
+    for LEARN_RATE in 0.0001 0.001 0.01 0.1
+    do
+        for BATCH_SIZE in 32 64 256 512
+        do
+
+            #!!! Job name must be < 15 characters, first one must be alphabetic
+            NAME="iannwtf"
+	        echo "Submitting: ${NAME}"
+	        echo "With ${OPTIMIZER}, ${LEARN_RATE}, ${BATCH_SIZE}"
+
+            CMD="python3 util.py -o ${OPTIMIZER} -l ${LEARN_RATE} -b ${BATCH_SIZE} -e 20 -f grid_search.txt -m ex03.exercise5"
+
+            PBS="#!/bin/bash\n\
+                #PBS -N ${NAME}\n\
+                #PBS -l select=1:ncpus=1:mem=8000:ngpus=1,place=vscatter:excl\n\
+                #PBS -l walltime=1:00:00\n\
+                echo \$PBS_JOBID\n\
+                cd /dev/cpuset/PBSPro/\$PBS_JOBID\n\
+                CPUNODES=\`cat cpuset.mems\`\n\
+                CPULIST=\`cat cpuset.cpus\`\n\
+                cd \$PBS_O_WORKDIR\n\
+                NUMACMD=\"numactl -i \$CPUNODES -N \$CPUNODES ${CMD}\"\n\
+                echo \"Command:\"\n\
+                echo \"\$NUMACMD\"\n\
+                \$NUMACMD"
+
+            echo -e ${PBS} | qsub
+            sleep 0.5
+            echo "done."
+        done
+    done
+done
