@@ -12,7 +12,7 @@ tf.set_random_seed(SEED)
 weights_n = 0
 
 def get_weights_and_bias(shape, shape_b=None, dtype=tf.float32,
-        initializer_w=tf.random_uniform_initializer(-1.0, 1.0),
+        initializer_w=tf.random_normal_initializer(-1.0, 1.0),
         initializer_b=tf.zeros_initializer()):
     if not shape_b:
         shape_b = shape[-1:]
@@ -77,12 +77,14 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
     conv_n += 1
     # this adds a prefix to all variable names
     with tf.variable_scope('conv%d' % conv_n):
-        # Xavier initialisation
         (fan_in, fan_out) = kshape[1:3]
-        low = -1*np.sqrt(6.0/(fan_in + fan_out)) # use 4 for sigmoid, 1 for tanh activation
-        high = 1*np.sqrt(6.0/(fan_in + fan_out))
-        kernels = tf.Variable(tf.random_uniform(kshape, minval=low, maxval=high,
-            dtype=tf.float32), name='kernels')
+        if activation == tf.nn.tanh:
+            initializer = tf.random_normal_initializer(stddev=fan_in ** (-0.5))
+        elif activation == tf.nn.relu:
+            initializer = tf.random_normal_initializer(stddev=2 / fan_in)
+        else:
+            initializer = tf.random_normal_initializer()
+        kernels = tf.Variable(initializer=initializer, name='kernels')
         if use_bias:
             bias_shape = (kshape[-1],)
             biases = tf.Variable(tf.constant(0.1), name='bias')
@@ -130,7 +132,13 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh,
     global fc_n
     fc_n += 1
     with tf.variable_scope('fully%d' % fc_n):
-        init_W = tf.truncated_normal_initializer(stddev=0.1)
+        (fan_in, fan_out) = (input.shape[-1], n_out)
+        if activation == tf.nn.tanh:
+            init_W = tf.random_normal_initializer(stddev=fan_in ** (-0.5))
+        elif activation == tf.nn.relu:
+            init_W = tf.random_normal_initializer(stddev=2 / fan_in)
+        else:
+            init_W = tf.random_normal_initializer()
         init_b = tf.constant_initializer(0.1)
         W = tf.get_variable(
                 'weights',
@@ -271,7 +279,10 @@ class ParameterTest(object):
         )
 
 def get_optimizer(name):
-    return getattr(tf.train, name + 'Optimizer')
+    if isinstance(name, tf.train.Optimizer):
+        return name
+    else:
+        return getattr(tf.train, name + 'Optimizer')
 
 def main():
     tf_optimizers = {class_name[:-len('Optimizer')] for class_name in dir(tf.train) if 'Optimizer'
