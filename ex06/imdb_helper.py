@@ -8,26 +8,6 @@ PICKLE_NAME = 'imdb_helper.pckl'
 
 class IMDB:
 
-    # def loadattr(self, *names):
-    #     if os.path.exists(PICKLE_NAME):
-    #         with open(PICKLE_NAME, 'rb'):
-    #             for name in names:
-    #                 d = pickle.load(PICKLE_NAME)
-    #                 setattr(self, name, d[name])
-    #     else:
-    #         raise RuntimeError('Could not load state.')
-
-    # def saveattr(self, *names_vals):
-    #     if os.path.exists(PICKLE_NAME):
-    #         with open(PICKLE_NAME, 'rb'):
-    #             d = pickle.load(PICKLE_NAME)
-    #     else:
-    #         d = dict()
-
-    #     for (name, value) in names_vals:
-    #         d[name] = value
-    #     with open(PICKLE_NAME, 'wb'):
-    #         pickle.dump(d)
     def load(self):
         f = open(PICKLE_NAME, 'rb')
         tmp_dict = pickle.load(f)

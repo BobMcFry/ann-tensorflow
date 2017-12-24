@@ -132,7 +132,7 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh,
     global fc_n
     fc_n += 1
     with tf.variable_scope('fully%d' % fc_n):
-        (fan_in, fan_out) = (input.shape[-1], n_out)
+        (fan_in, fan_out) = (input.shape[-1].value, n_out)
         if activation == tf.nn.tanh:
             init_W = tf.random_normal_initializer(stddev=fan_in ** (-0.5))
         elif activation == tf.nn.relu:
