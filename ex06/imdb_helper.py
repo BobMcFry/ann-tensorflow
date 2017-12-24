@@ -4,7 +4,7 @@ from nltk.tokenize import RegexpTokenizer
 from collections import Counter
 import numpy as np
 
-PICKLE_NAME = 'data.pckl'
+PICKLE_NAME = 'imbd_helper.pckl'
 
 class IMDB:
 
@@ -29,15 +29,15 @@ class IMDB:
     #     with open(PICKLE_NAME, 'wb'):
     #         pickle.dump(d)
     def load(self):
-        f = open(self.filename, 'rb')
-        tmp_dict = cPickle.load(f)
+        f = open(PICKLE_NAME, 'rb')
+        tmp_dict = pickle.load(f)
         f.close()
 
         self.__dict__.update(tmp_dict)
 
     def save(self):
-        f = open(self.filename, 'wb')
-        cPickle.dump(self.__dict__, f, 2)
+        f = open(PICKLE_NAME, 'wb')
+        pickle.dump(self.__dict__, f, 2)
         f.close()
 
     def __init__(self, directory):
