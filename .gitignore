@@ -108,3 +108,5 @@ data
 *.pdf
 Model_*
 *.swo
+
+*.html

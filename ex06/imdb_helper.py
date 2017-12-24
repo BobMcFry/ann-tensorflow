@@ -4,7 +4,7 @@ from nltk.tokenize import RegexpTokenizer
 from collections import Counter
 import numpy as np
 
-PICKLE_NAME = 'imbd_helper.pckl'
+PICKLE_NAME = 'imdb_helper.pckl'
 
 class IMDB:
 

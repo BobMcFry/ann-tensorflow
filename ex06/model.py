@@ -75,3 +75,10 @@ class IMDBModel(object):
 
     def get_embeddings(self):
         return self.embedding_matrix.eval()
+
+def main():
+    from imdb_helper import IMDB
+    helper = IMDB('data')
+
+if __name__ == "__main__":
+    main()
