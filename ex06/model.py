@@ -63,16 +63,16 @@ class IMDBModel(object):
     def get_zero_state(self, session):
         return session.run(self.zero_state)
 
-    def run_training_step(self, session, sequences, labels, state):
-        for subsequence in subsequences(data):
-            # Get state of last step
-            _state, _ = session.run([self.state, self.train_step],
-                feed_dict = {
-                    self.input_id: subsequence,
-                    self.label: label,
-                    self.cell_state: _state.c,
-                    self.hidden_state: _state.h
-                })
+    def run_training_step(self, session, subsequence, label, state):
+        # Get state of last step
+        _state, _ = session.run([self.state, self.train_step],
+            feed_dict = {
+                self.input_id: subsequence,
+                self.label: label,
+                self.cell_state: state.c,
+                self.hidden_state: state.h
+            })
+        return _state
 
     def get_embeddings(self):
         return self.embedding_matrix.eval()
@@ -81,8 +81,24 @@ def main():
     from imdb_helper import IMDB
     print('Loading IMDB data')
     helper = IMDB('data')
+
+    vocab_size = 20000
+    cutoff = 300
+    batch_size = 250
+    subseq_len = 100
+    helper.create_dictionaries(vocab_size, cutoff)
+
     print('Creating model')
-    model = IMDBModel()
+    model = IMDBModel(vocab_size=vocab_size, batch_size=batch_size, subsequence_length=subseq_len)
+    n_batches = helper.get_sizes()[0] // batch_size
+
+    with tf.Session() as session:
+        session.run(tf.global_variables_initializer())
+        state = model.get_zero_state(session)
+        for batch_idx, (batch, labels) in enumerate(helper.get_training_batch(batch_size)):
+            print(f'Training ... {batch_idx} of {n_batches}')
+            for subsequence_batch in helper.slize_batch(batch, subseq_len):
+                model.run_training_step(session, subsequence_batch, labels, state)
 
 if __name__ == "__main__":
     main()
