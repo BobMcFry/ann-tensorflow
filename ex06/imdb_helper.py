@@ -70,22 +70,23 @@ class IMDB:
         return np.array(data), np.array(labels)
 
     def create_dictionaries(self, vocabulary_size, cutoff_length):
-        joined_written_ratings = [word for text in self._training_data for word in text]
-        words_and_count = Counter(joined_written_ratings).most_common(vocabulary_size - 2)
+        if not hasattr(self, '_word2id'):
+            joined_written_ratings = [word for text in self._training_data for word in text]
+            words_and_count = Counter(joined_written_ratings).most_common(vocabulary_size - 2)
 
-        word2id = {word: word_id for word_id, (word, _) in enumerate(words_and_count, 2)}
-        word2id['_UNKNOWN_'] = 0
-        word2id['_NOT_A_WORD_'] = 1
+            word2id = {word: word_id for word_id, (word, _) in enumerate(words_and_count, 2)}
+            word2id['_UNKNOWN_'] = 0
+            word2id['_NOT_A_WORD_'] = 1
 
-        id2word = dict(zip(word2id.values(), word2id.keys()))
+            id2word = dict(zip(word2id.values(), word2id.keys()))
 
-        self._word2id = word2id
-        self._id2word = id2word
+            self._word2id = word2id
+            self._id2word = id2word
 
-        self._training_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._training_data])
-        self._validation_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._validation_data])
-        self._test_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._test_data])
-        self.save()
+            self._training_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._training_data])
+            self._validation_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._validation_data])
+            self._test_data = np.array([self.words2ids(text[:cutoff_length]) for text in self._test_data])
+            self.save()
 
 
     def words2ids(self, words):
