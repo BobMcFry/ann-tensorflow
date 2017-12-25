@@ -21,8 +21,8 @@ class IMDBModel(object):
         ############################################################################################
         #                                        Net inputs                                        #
         ############################################################################################
-        self.input_id    = tf.placeholder(tf.int32, shape=(batch_size, subsequence_length))
-        self.label        = tf.placeholder(tf.int32, shape=(batch_size,))
+        self.input_ids    = tf.placeholder(tf.int32, shape=(batch_size, subsequence_length))
+        self.labels        = tf.placeholder(tf.int32, shape=(batch_size,))
         self.hidden_state = tf.placeholder(tf.float32, shape=(batch_size, memory_size))
         self.cell_state   = tf.placeholder(tf.float32, shape=(batch_size, memory_size))
 
@@ -31,10 +31,10 @@ class IMDBModel(object):
         ############################################################################################
         self.embedding_matrix, _ = get_weights_and_bias((vocab_size, embedding_size))
         # inputs                   = tf.nn.dropout(
-        #                                tf.nn.embedding_lookup(self.embedding_matrix, self.input_id),
+        #                                tf.nn.embedding_lookup(self.embedding_matrix, self.input_ids),
         #                                keep_prob=keep_prob
         #                            )
-        inputs                   = tf.nn.embedding_lookup(self.embedding_matrix, self.input_id)
+        inputs                   = tf.nn.embedding_lookup(self.embedding_matrix, self.input_ids)
 
         ############################################################################################
         #                            LSTM stuff pasted from slides ???                             #
@@ -57,22 +57,37 @@ class IMDBModel(object):
         #                        Fully connected layer, loss, and training                         #
         ############################################################################################
         ff1             = fully_connected(outputs, 2, with_activation=False, use_bias=True)
-        loss            = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=ff1)
+        loss            = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels, logits=ff1)
         self.train_step = optimizer.minimize(loss)
+
+        self.predictions = tf.nn.softmax(ff1)
+        correct_prediction = tf.equal(tf.cast(tf.argmax(self.predictions, 1), tf.int32), self.labels)
+        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     def get_zero_state(self, session):
         return session.run(self.zero_state)
 
-    def run_training_step(self, session, subsequence, label, state):
+    def run_training_step(self, session, subsequence_batch, label, state):
         # Get state of last step
         _state, _ = session.run([self.state, self.train_step],
             feed_dict = {
-                self.input_id: subsequence,
-                self.label: label,
+                self.input_ids: subsequence_batch,
+                self.labels: label,
                 self.cell_state: state.c,
                 self.hidden_state: state.h
             })
         return _state
+
+    def run_test_step(self, session, subsequence_batch, labels):
+        zero_state = self.get_zero_state(session)
+        predictions, accuracy = session.run([self.predictions, self.accuracy],
+            feed_dict = {
+                self.input_ids: subsequence_batch,
+                self.labels: labels,
+                self.cell_state: zero_state.c,
+                self.hidden_state: zero_state.h
+            })
+        return accuracy
 
     def get_embeddings(self):
         return self.embedding_matrix.eval()
@@ -88,17 +103,28 @@ def main():
     subseq_len = 100
     helper.create_dictionaries(vocab_size, cutoff)
 
+    epochs = 5
+
     print('Creating model')
     model = IMDBModel(vocab_size=vocab_size, batch_size=batch_size, subsequence_length=subseq_len)
     n_batches = helper.get_sizes()[0] // batch_size
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
-        state = model.get_zero_state(session)
-        for batch_idx, (batch, labels) in enumerate(helper.get_training_batch(batch_size)):
-            print(f'Training ... {batch_idx} of {n_batches}')
-            for subsequence_batch in helper.slize_batch(batch, subseq_len):
-                model.run_training_step(session, subsequence_batch, labels, state)
+        for epoch in range(epochs):
+            for batch_idx, (batch, labels) in enumerate(helper.get_training_batch(batch_size)):
+                state = model.get_zero_state(session)
+                print(f'Training ... {batch_idx} of {epochs * n_batches}')
+                for subsequence_batch in helper.slize_batch(batch, subseq_len):
+                    model.run_training_step(session, subsequence_batch, labels, state)
+
+            ########################################################################################
+            #                               Test with one test batch                               #
+            ########################################################################################
+            test_data, test_labels = next(helper.get_test_batch(batch_size))
+            test_data = next(helper.slize_batch(test_data, subseq_len))
+            accuracy = model.run_test_step(session, test_data, labels)
+            print(f'Accuracy = {accuracy:3.3f}')
 
 if __name__ == "__main__":
     main()
