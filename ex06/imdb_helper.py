@@ -126,20 +126,21 @@ class IMDB:
             yield data[on:off], labels[on:off]
 
 
-    def slize_batch(self, batch, slize_size):
+    def slice_batch(self, batch, slice_size):
         max_len = np.max([len(sample) for sample in batch])
-        steps = int(np.ceil(max_len / slize_size))
-        max_len = slize_size * steps
+        steps = int(np.ceil(max_len / slice_size))
+        max_len = slice_size * steps
 
         # Resize all samples in batch to same size
         batch_size = len(batch)
+        # fill buffer with _NOT_A_WORD_
         buffer = np.ones((batch_size, max_len), dtype = np.int32)
         for i, sample in enumerate(batch):
             buffer[i, 0:len(sample)] = sample
 
         for i in range(steps):
-            on = i * slize_size
-            off = on + slize_size
+            on = i * slice_size
+            off = on + slice_size
             yield buffer[:, on:off]
 
 
