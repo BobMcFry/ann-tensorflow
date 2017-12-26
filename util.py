@@ -12,7 +12,7 @@ tf.set_random_seed(SEED)
 weights_n = 0
 
 def get_weights_and_bias(shape, shape_b=None, dtype=tf.float32,
-        initializer_w=tf.random_normal_initializer(-1.0, 1.0),
+        initializer_w=tf.random_normal_initializer(),
         initializer_b=tf.zeros_initializer()):
     if not shape_b:
         shape_b = shape[-1:]

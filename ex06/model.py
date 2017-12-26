@@ -16,7 +16,7 @@ class IMDBModel(object):
         keep_prob          = kwargs.get('keep_prob', 0.85)
         subsequence_length = kwargs.get('subsequence_length', 100)
         batch_size         = kwargs.get('batch_size', 1)
-        optimizer          = get_optimizer(kwargs.get('optimizer', 'Adam'))()
+        optimizer          = get_optimizer(kwargs.get('optimizer', 'Adam'))
 
         ############################################################################################
         #                                        Net inputs                                        #
@@ -57,7 +57,9 @@ class IMDBModel(object):
         #                        Fully connected layer, loss, and training                         #
         ############################################################################################
         ff1             = fully_connected(outputs, 2, with_activation=False, use_bias=True)
-        loss            = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels, logits=ff1)
+        loss            = tf.reduce_mean(
+                                tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
+                                                                               logits=ff1))
         self.train_step = optimizer.minimize(loss)
 
         self.predictions = tf.nn.softmax(ff1)
@@ -102,29 +104,30 @@ def main():
     batch_size = 250
     subseq_len = 100
     helper.create_dictionaries(vocab_size, cutoff)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
 
-    epochs = 5
+    epochs = 2
 
     print('Creating model')
-    model = IMDBModel(vocab_size=vocab_size, batch_size=batch_size, subsequence_length=subseq_len)
-    n_batches = helper.get_sizes()[0] // batch_size
+    model = IMDBModel(vocab_size=vocab_size, batch_size=batch_size, subsequence_length=subseq_len,
+                      optimizer=optimizer)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
         for epoch in range(epochs):
-            for batch_idx, (batch, labels) in enumerate(helper.get_training_batch(batch_size)):
+            print(f'Starting epoch {epoch}')
+            for batch, labels in helper.get_training_batch(batch_size):
                 state = model.get_zero_state(session)
-                print(f'Training ... {batch_idx} of {epochs * n_batches}')
                 for subsequence_batch in helper.slize_batch(batch, subseq_len):
-                    model.run_training_step(session, subsequence_batch, labels, state)
+                    state = model.run_training_step(session, subsequence_batch, labels, state)
 
-            ########################################################################################
-            #                               Test with one test batch                               #
-            ########################################################################################
-            test_data, test_labels = next(helper.get_test_batch(batch_size))
-            test_data = next(helper.slize_batch(test_data, subseq_len))
-            accuracy = model.run_test_step(session, test_data, labels)
-            print(f'Accuracy = {accuracy:3.3f}')
+                ########################################################################################
+                #                               Test with one test batch                               #
+                ########################################################################################
+                test_data, test_labels = next(helper.get_test_batch(batch_size))
+                test_data = next(helper.slize_batch(test_data, subseq_len))
+                accuracy = model.run_test_step(session, test_data, test_labels)
+                print(f'Accuracy = {accuracy:3.3f}')
 
 if __name__ == "__main__":
     main()
