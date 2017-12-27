@@ -1,15 +1,67 @@
-from imdb_helper import IMDB
 from argparse import ArgumentParser
 import numpy as np
+
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell, LSTMStateTuple, DropoutWrapper
 from tensorflow import (placeholder, cond, reduce_mean, reduce_sum, where, not_equal, ones_like,
                         zeros_like, reshape, equal, constant, cast, concat, argmax)
 from tensorflow import nn
+
 import sys; sys.path.insert(0, '..')
 from util import get_weights_and_bias, get_optimizer, fully_connected
+from imdb_helper import IMDB
 
-def length(sequences):
+
+class OptimizerSpec(dict):
+    '''Encapsulate all the info needed for creating any kind of optimizer.'''
+
+    @staticmethod
+    def parse_learning_rate(s):
+        '''Create a tf.piecewise_constant learning rate scheduling from a string.'''
+        try:
+            return float(s)
+        except ValueError:
+            boundary_str, lr_str = s.split(':')
+            boundaries = [int(n) for n in boundary_str.split(',')]
+            lrs = [float(n) for n in lr_str.split(',')]
+            global_step = tf.Variable(0, trainable=False, name='global_step')
+            learning_rate = tf.train.piecewise_constant(global_step, boundaries, lrs)
+            return learning_rate
+
+    def __str__(self):
+        key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
+        return f'<Optimizer: {key_val_str}>'
+
+    def __init__(self, **kwargs):
+        if not 'kind' in kwargs:
+            raise ValueError('No optimizer name given')
+        kwargs['learning_rate'] = OptimizerSpec.parse_learning_rate(kwargs['learning_rate'])
+        self.update(kwargs)
+
+    def create(self):
+        kind = self['kind']
+        learning_rate = self['learning_rate']
+        name = self.get('name', 'optimizer')
+        optimizer_cls = get_optimizer(kind)
+        if kind in ['Momentum', 'RMSProp']:
+            try:
+                momentum = self['momentum']
+            except KeyError:
+                raise ValueError('Momentum parameter is necessary for MomentumOptimizer')
+            if kind == 'Momentum':
+                if 'use_nesterov' in self:
+                    use_nesterov = self['use_nesterov']
+                else:
+                    use_nesterov = False
+                return optimizer_cls(learning_rate, momentum, use_nesterov, name=name)
+            else:
+                return optimizer_cls(learning_rate, momentum, name=name)
+        else:
+            return optimizer_cls(learning_rate, name=name)
+
+
+
+def length(sequences, padding_value=1):
     '''Find the actual sequence length for each sequence in a tensor. Sequences could be padded with
     1s if they were shorter than the cutoff length chosen.
 
@@ -23,8 +75,10 @@ def length(sequences):
     tf.Tensor
         Tensor of shape [batch_size,], each value being the true length of its associated sequence
     '''
-    _1         = ones_like(sequences)
+    _1         = tf.fill(tf.shape(sequences), padding_value)
     _0         = zeros_like(sequences)
+    # set values != 1 to 1 and the rest to 0, so the sum is the number
+    # of nonzeros
     is_padding = where(not_equal(sequences, _1), _1, _0)
     return reduce_sum(is_padding, axis=1)
 
@@ -57,10 +111,10 @@ class IMDBModel(object):
         memory_size        = kwargs['memory_size']
         keep_prob          = kwargs['keep_prob']
         subsequence_length = kwargs['subsequence_length']
-        optimizer          = get_optimizer(kwargs['optimizer'])
+        optimizer          = kwargs['optimizer'].create()
 
         ############################################################################################
-        #                                        Net embeddings                                        #
+        #                                        Net embeddings                                    #
         ############################################################################################
         self.batch_size   = placeholder(tf.int32,   shape=[],                  name='batch_size')
         self.is_training  = placeholder(tf.bool,    shape=[],                  name='is_training')
@@ -92,13 +146,13 @@ class IMDBModel(object):
         keep_prob = cond(self.is_training, lambda: constant(keep_prob), lambda: constant(1.0))
         cell      = DropoutWrapper(cell, output_keep_prob=keep_prob)
 
-        # what's the difference to just creating a zero-filled variable?
+        # what's the difference to just creating a zero-filled tensor tuple?
         self.zero_state = cell.zero_state(self.batch_size, tf.float32)
         state           = LSTMStateTuple(c=self.cell_state, h=self.hidden_state)
 
         # A dynamic rnn creates the graph on the fly, so it can deal with embeddings of different
         # lengths. We do not need to unstack the embedding tensor to get rows, instead we compute
-        # thethe actual sequence lengths and pass that
+        # the actual sequence lengths and pass that
         outputs, self.state = nn.dynamic_rnn(cell, embeddings, sequence_length=self.lengths,
                                              initial_state=state)
         # Recreate tensor from list
@@ -111,7 +165,8 @@ class IMDBModel(object):
         ff1             = fully_connected(outputs, 2, with_activation=False, use_bias=True)
         loss            = reduce_mean(
                                 nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
-                                                                               logits=ff1))
+                                                                            logits=ff1)
+                          )
         self.train_step    = optimizer.minimize(loss)
         self.predictions   = nn.softmax(ff1)
         correct_prediction = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
@@ -223,10 +278,20 @@ def main():
     parser.add_argument('--memory_size', type=int, default=64, help='Memory size')
     parser.add_argument('-k', '--keep_probability', type=float, default=0.85,
                         help='Percentage of neurons to keep during dropout')
+    parser.add_argument('-m', '--momentum', type=float, default=0.5,
+                        help='Momentum (only used for Momentum optimizer)')
+    parser.add_argument('-o', '--optimizer', type=str, default='Adam',
+                        help='Optimizer class')
+    parser.add_argument('--schedule', type=str, default=None,
+                        help='Learning rate schedule. Format: "boundary1,...,boundaryN:lr1,...,lrN"')
+
     args = parser.parse_args()
-    batch_size = args.batch_size
     helper.create_dictionaries(args.vocabulary_size, args.cutoff)
-    optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+
+    opti_spec = OptimizerSpec(learning_rate=args.learning_rate, schedule=args.schedule,
+                              kind=args.optimizer, momentum=args.momentum)
+    print(f'Using optimizer {opti_spec}')
+    batch_size = args.batch_size
     epochs = args.epochs
 
     ################################################################################################
@@ -234,8 +299,8 @@ def main():
     ################################################################################################
     print('Creating model')
     model = IMDBModel(vocab_size=args.vocabulary_size, subsequence_length=args.sequence_length,
-                      optimizer=optimizer, embedding_size=args.embedding_size,
-                      memory_size=args.memory_size, keep_prob=args.keep_probability)
+                    optimizer=opti_spec, embedding_size=args.embedding_size,
+                    memory_size=args.memory_size, keep_prob=args.keep_probability)
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -243,7 +308,7 @@ def main():
         for epoch in range(epochs):
             print(f'Starting epoch {epoch}')
 
-            for batch, labels in helper.get_training_batch(batch_size):
+            for batch_idx, (batch, labels) in enumerate(helper.get_training_batch(batch_size)):
                 # reset state for each batch
                 state = model.get_zero_state(session, batch_size)
 
@@ -251,13 +316,14 @@ def main():
                     # push one subsequenc of each batch member
                     state = model.run_training_step(session, subsequence_batch, labels, state)
 
-            ##############################
-            #  Test with all test data.  #
-            ##############################
-            test_data, test_labels = helper._test_data, helper._test_labels
-            test_data = next(helper.slice_batch(test_data, args.sequence_length))
-            accuracy = model.run_test_step(session, test_data, test_labels)
-            print(f'Accuracy = {accuracy:3.3f}')
+                if batch_idx % 10 == 0:
+                    ##############################
+                    #  Test with all test data.  #
+                    ##############################
+                    test_data, test_labels = helper._test_data, helper._test_labels
+                    test_data = next(helper.slice_batch(test_data, args.sequence_length))
+                    accuracy = model.run_test_step(session, test_data, test_labels)
+                    print(f'Accuracy = {accuracy:3.3f}')
 
 if __name__ == "__main__":
     main()

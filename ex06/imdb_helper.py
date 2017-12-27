@@ -144,9 +144,9 @@ class IMDB:
             yield buffer[:, on:off]
 
 
-    def get_sizes(self):
-        training_samples_n = self._training_labels.shape[0]
-        validation_samples_n = self._validation_labels.shape[0]
-        test_samples_n = self._test_labels.shape[0]
+    def get_sizes(self, batch_size=1):
+        training_samples_n   = int(self._training_labels.shape[0] / batch_size + 0.5)
+        validation_samples_n = int(self._validation_labels.shape[0] / batch_size + 0.5)
+        test_samples_n       = int(self._test_labels.shape[0] / batch_size + 0.5)
         return training_samples_n, validation_samples_n, test_samples_n
 
