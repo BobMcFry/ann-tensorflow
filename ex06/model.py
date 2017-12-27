@@ -15,18 +15,22 @@ from imdb_helper import IMDB
 class OptimizerSpec(dict):
     '''Encapsulate all the info needed for creating any kind of optimizer.'''
 
-    @staticmethod
-    def parse_learning_rate(s):
+    def parse_learning_rate(self, rate):
         '''Create a tf.piecewise_constant learning rate scheduling from a string.'''
         try:
-            return float(s)
+            self.learning_rate = float(rate)
+            self.global_step   = None
+            print('Using fixed learning rate...')
         except ValueError:
-            boundary_str, lr_str = s.split(':')
-            boundaries = [int(n) for n in boundary_str.split(',')]
-            lrs = [float(n) for n in lr_str.split(',')]
-            global_step = tf.Variable(0, trainable=False, name='global_step')
-            learning_rate = tf.train.piecewise_constant(global_step, boundaries, lrs)
-            return learning_rate
+            print('Creating schedule...')
+            boundary_str, lr_str = rate.split(':')
+            boundaries           = [int(n) for n in boundary_str.split(',')]
+            lrs                  = [float(n) for n in lr_str.split(',')]
+            global_step          = tf.Variable(0, trainable=False, dtype=tf.int32,
+                                               name='global_step')
+            self.learning_rate   = tf.train.piecewise_constant(global_step, boundaries, lrs,
+                                                               name='rate_schedule')
+            self.global_step     = global_step
 
     def __str__(self):
         key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
@@ -35,13 +39,13 @@ class OptimizerSpec(dict):
     def __init__(self, **kwargs):
         if not 'kind' in kwargs:
             raise ValueError('No optimizer name given')
-        kwargs['learning_rate'] = OptimizerSpec.parse_learning_rate(kwargs['learning_rate'])
+        self.parse_learning_rate(kwargs['learning_rate'])
         self.update(kwargs)
 
     def create(self):
-        kind = self['kind']
-        learning_rate = self['learning_rate']
-        name = self.get('name', 'optimizer')
+        kind          = self['kind']
+        learning_rate = self.learning_rate
+        name          = self.get('name', 'optimizer')
         optimizer_cls = get_optimizer(kind)
         if kind in ['Momentum', 'RMSProp']:
             try:
@@ -111,7 +115,10 @@ class IMDBModel(object):
         memory_size        = kwargs['memory_size']
         keep_prob          = kwargs['keep_prob']
         subsequence_length = kwargs['subsequence_length']
-        optimizer          = kwargs['optimizer'].create()
+        optimizer_spec     = kwargs['optimizer']
+        optimizer          = optimizer_spec.create()
+        self.learning_rate = optimizer_spec.learning_rate
+        self.global_step   = optimizer_spec.global_step
 
         ############################################################################################
         #                                        Net embeddings                                    #
@@ -167,7 +174,11 @@ class IMDBModel(object):
                                 nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
                                                                             logits=ff1)
                           )
-        self.train_step    = optimizer.minimize(loss)
+        with tf.control_dependencies([tf.Print(self.learning_rate, [self.learning_rate])]):
+            if self.global_step:
+                self.train_step = optimizer.minimize(loss, global_step=self.global_step)
+            else:
+                self.train_step = optimizer.minimize(loss)
         self.predictions   = nn.softmax(ff1)
         correct_prediction = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
         self.accuracy      = reduce_mean(cast(correct_prediction, tf.float32))
@@ -283,12 +294,16 @@ def main():
     parser.add_argument('-o', '--optimizer', type=str, default='Adam',
                         help='Optimizer class')
     parser.add_argument('--schedule', type=str, default=None,
-                        help='Learning rate schedule. Format: "boundary1,...,boundaryN:lr1,...,lrN"')
+                        help='Learning rate schedule. Format: "boundary1,...,boundaryN-1:lr1,...,lrN"')
 
     args = parser.parse_args()
     helper.create_dictionaries(args.vocabulary_size, args.cutoff)
 
-    opti_spec = OptimizerSpec(learning_rate=args.learning_rate, schedule=args.schedule,
+    if args.schedule:
+        learning_rate = args.schedule
+    else:
+        learning_rate = args.learning_rate
+    opti_spec = OptimizerSpec(learning_rate=learning_rate, schedule=args.schedule,
                               kind=args.optimizer, momentum=args.momentum)
     print(f'Using optimizer {opti_spec}')
     batch_size = args.batch_size
