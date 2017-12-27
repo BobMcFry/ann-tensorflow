@@ -19,18 +19,18 @@ class OptimizerSpec(dict):
         '''Create a tf.piecewise_constant learning rate scheduling from a string.'''
         try:
             self.learning_rate = float(rate)
-            self.global_step   = None
+            self.step_counter   = None
             print('Using fixed learning rate...')
         except ValueError:
             print('Creating schedule...')
             boundary_str, lr_str = rate.split(':')
             boundaries           = [int(n) for n in boundary_str.split(',')]
             lrs                  = [float(n) for n in lr_str.split(',')]
-            global_step          = tf.Variable(0, trainable=False, dtype=tf.int32,
-                                               name='global_step')
-            self.learning_rate   = tf.train.piecewise_constant(global_step, boundaries, lrs,
+            step_counter          = tf.Variable(0, trainable=False, dtype=tf.int32,
+                                               name='step_counter')
+            self.learning_rate   = tf.train.piecewise_constant(step_counter, boundaries, lrs,
                                                                name='rate_schedule')
-            self.global_step     = global_step
+            self.step_counter     = step_counter
 
     def __str__(self):
         key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
@@ -118,7 +118,7 @@ class IMDBModel(object):
         optimizer_spec     = kwargs['optimizer']
         optimizer          = optimizer_spec.create()
         self.learning_rate = optimizer_spec.learning_rate
-        self.global_step   = optimizer_spec.global_step
+        self.step_counter   = optimizer_spec.step_counter
 
         ############################################################################################
         #                                        Net embeddings                                    #
@@ -172,13 +172,11 @@ class IMDBModel(object):
         ff1             = fully_connected(outputs, 2, with_activation=False, use_bias=True)
         loss            = reduce_mean(
                                 nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
-                                                                            logits=ff1)
-                          )
-        with tf.control_dependencies([tf.Print(self.learning_rate, [self.learning_rate])]):
-            if self.global_step:
-                self.train_step = optimizer.minimize(loss, global_step=self.global_step)
-            else:
-                self.train_step = optimizer.minimize(loss)
+                                                                            logits=ff1))
+        if self.step_counter:
+            self.train_step = optimizer.minimize(loss, global_step=self.step_counter)
+        else:
+            self.train_step = optimizer.minimize(loss)
         self.predictions   = nn.softmax(ff1)
         correct_prediction = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
         self.accuracy      = reduce_mean(cast(correct_prediction, tf.float32))
@@ -316,6 +314,12 @@ def main():
     model = IMDBModel(vocab_size=args.vocabulary_size, subsequence_length=args.sequence_length,
                     optimizer=opti_spec, embedding_size=args.embedding_size,
                     memory_size=args.memory_size, keep_prob=args.keep_probability)
+
+    train_data = helper._training_data
+    max_len = np.max([len(sample) for sample in train_data])
+    steps = int(np.ceil(max_len / args.subsequence_length))
+    print(f'Estimated number of steps: {steps}')
+
 
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
