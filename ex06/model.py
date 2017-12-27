@@ -315,12 +315,6 @@ def main():
                     optimizer=opti_spec, embedding_size=args.embedding_size,
                     memory_size=args.memory_size, keep_prob=args.keep_probability)
 
-    train_data = helper._training_data
-    max_len = np.max([len(sample) for sample in train_data])
-    steps = int(np.ceil(max_len / args.subsequence_length))
-    print(f'Estimated number of steps: {steps}')
-
-
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
@@ -343,6 +337,14 @@ def main():
                     test_data = next(helper.slice_batch(test_data, args.sequence_length))
                     accuracy = model.run_test_step(session, test_data, test_labels)
                     print(f'Accuracy = {accuracy:3.3f}')
+
+def estimate_number_of_steps(train_data, sequence_length, epochs, batch_size):
+    batches = int(train_data.shape[0] / batch_size + 0.5)
+    max_len = np.max([len(sample) for sample in train_data])
+    steps = int(np.ceil(max_len / sequence_length)) * batches * epochs
+    print(f'Estimated number of steps: {steps}')
+
+
 
 if __name__ == "__main__":
     main()
