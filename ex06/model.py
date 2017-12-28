@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell, LSTMStateTuple, DropoutWrapper
 from tensorflow import (placeholder, cond, reduce_mean, reduce_sum, where, not_equal, ones_like,
-                        zeros_like, reshape, equal, constant, cast, concat, argmax)
+                        zeros_like, reshape, equal, constant, cast, concat, argmax, Variable)
 from tensorflow import nn
 
 import sys; sys.path.insert(0, '..')
@@ -13,41 +13,52 @@ from imdb_helper import IMDB
 
 
 class OptimizerSpec(dict):
-    '''Encapsulate all the info needed for creating any kind of optimizer.'''
+    '''Encapsulate all the info needed for creating any kind of optimizer.
 
-    def parse_learning_rate(self, rate):
-        '''Create a tf.piecewise_constant learning rate scheduling from a string.'''
-        try:
-            self.learning_rate = float(rate)
-            self.step_counter   = None
-            print('Using fixed learning rate...')
-        except ValueError:
-            print('Creating schedule...')
-            boundary_str, lr_str = rate.split(':')
-            boundaries           = [int(n) for n in boundary_str.split(',')]
-            lrs                  = [float(n) for n in lr_str.split(',')]
-            step_counter          = tf.Variable(0, trainable=False, dtype=tf.int32,
-                                               name='step_counter')
-            self.learning_rate   = tf.train.piecewise_constant(step_counter, boundaries, lrs,
-                                                               name='rate_schedule')
-            self.step_counter     = step_counter
+    Attributes
+    ----------
+    step_counter    :   Variable
+                        Counter to be passed to optimizer#minimize() so it gets incremented during
+                        each update
+    learning_rate   :   float or tf.train.piecewise_constant
+                        Learning rate of the optimizer (for later retrieval)
 
-    def __str__(self):
-        key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
-        return f'<Optimizer: {key_val_str}>'
+    '''
 
     def __init__(self, **kwargs):
+        '''
+        Parameters
+        ----------
+        kind    :   str
+                    Name of the optimizer
+        learning_rate   :   str
+                            Float string or schedule spec
+        name    :   str
+                    Optional name for the piecewise_constant operation
+        momentum    :   float
+                        Optional momentum for momentum optimizers
+        use_nesterov    :   bool
+                            Nesterov flag for momentum optimizer
+        '''
         if not 'kind' in kwargs:
             raise ValueError('No optimizer name given')
         self.parse_learning_rate(kwargs['learning_rate'])
         self.update(kwargs)
 
     def create(self):
+        '''Build the Optimizer object from the properties
+
+        Return
+        ------
+        tf.train.Optimizer
+            Ready-made optimizer
+        '''
         kind          = self['kind']
         learning_rate = self.learning_rate
         name          = self.get('name', 'optimizer')
         optimizer_cls = get_optimizer(kind)
         if kind in ['Momentum', 'RMSProp']:
+            # only those two use momentum param
             try:
                 momentum = self['momentum']
             except KeyError:
@@ -63,9 +74,39 @@ class OptimizerSpec(dict):
         else:
             return optimizer_cls(learning_rate, name=name)
 
+    def parse_learning_rate(self, rate):
+        '''Create a tf.piecewise_constant learning rate scheduling from a string. Set this learning
+        rate and step counter as object attributes.
+
+        Parameters
+        ----------
+        rate    :   str
+                    Either a string that can be parsed into a float, or of the format
+                    "b1,...,bn-1:l1,...,ln" where bi are the boundaries and li are the learning rate
+                    values for a piecewise constant learning rate
+        '''
+        try:
+            # try to parse as float
+            self.learning_rate = float(rate)
+            self.step_counter   = None
+            print('Using fixed learning rate...')
+        except ValueError:
+            # must be schedule string
+            print('Creating schedule...')
+            boundary_str, lr_str = rate.split(':')
+            boundaries           = [int(n) for n in boundary_str.split(',')]
+            lrs                  = [float(n) for n in lr_str.split(',')]
+            self.step_counter    = Variable(0, trainable=False, dtype=tf.int32, name='step_counter')
+            self.learning_rate   = tf.train.piecewise_constant(self.step_counter, boundaries, lrs,
+                                                               name='rate_schedule')
+
+    def __str__(self):
+        key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
+        return f'<Optimizer: {key_val_str}>'
 
 
-def length(sequences, padding_value=1):
+
+def sequence_lengths(sequences, padding_value=1):
     '''Find the actual sequence length for each sequence in a tensor. Sequences could be padded with
     1s if they were shorter than the cutoff length chosen.
 
@@ -118,7 +159,7 @@ class IMDBModel(object):
         optimizer_spec     = kwargs['optimizer']
         optimizer          = optimizer_spec.create()
         self.learning_rate = optimizer_spec.learning_rate
-        self.step_counter   = optimizer_spec.step_counter
+        self.step_counter  = optimizer_spec.step_counter
 
         ############################################################################################
         #                                        Net embeddings                                    #
@@ -131,7 +172,7 @@ class IMDBModel(object):
         self.hidden_state = placeholder(tf.float32, shape=(None, memory_size), name='hidden_state')
         self.cell_state   = placeholder(tf.float32, shape=(None, memory_size), name='cell_state')
 
-        self.lengths = length(self.word_ids)
+        self.lengths = sequence_length(self.word_ids)
 
         ############################################################################################
         #                                        Embedding                                         #
@@ -174,12 +215,13 @@ class IMDBModel(object):
                                 nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
                                                                             logits=ff1))
         if self.step_counter:
+            # we're on a rate schedule
             self.train_step = optimizer.minimize(loss, global_step=self.step_counter)
         else:
             self.train_step = optimizer.minimize(loss)
-        self.predictions   = nn.softmax(ff1)
-        correct_prediction = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
-        self.accuracy      = reduce_mean(cast(correct_prediction, tf.float32))
+        self.predictions    = nn.softmax(ff1)
+        correct_prediction  = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
+        self.accuracy       = reduce_mean(cast(correct_prediction, tf.float32))
 
 
     def get_zero_state(self, session, batch_size):
@@ -265,36 +307,15 @@ class IMDBModel(object):
 
 def main():
     ################################################################################################
+    #                                       Parse arguments                                        #
+    ################################################################################################
+    args = get_arguments()
+
+    ################################################################################################
     #                                        Load the data                                         #
     ################################################################################################
     print('Loading IMDB data')
     helper = IMDB('data')
-
-    ################################################################################################
-    #                                       Parse arguments                                        #
-    ################################################################################################
-    parser = ArgumentParser()
-    parser.add_argument('-v', '--vocabulary_size', type=int, default=20000)
-    parser.add_argument('-s', '--sequence_length', type=int,
-                        default=100, help='Length for subsequence training.')
-    parser.add_argument('-c', '--cutoff', type=int, default=300,
-                        help='Cutoff length for reviews.')
-    parser.add_argument('-b', '--batch_size', type=int, default=250, help='Batch size')
-    parser.add_argument('-e', '--epochs', type=int, default=2, help='Number of epochs')
-    parser.add_argument('-l', '--learning_rate', type=float, default=0.03,
-                        help='Initial learning rate (scheduling is used)')
-    parser.add_argument('--embedding_size', type=int, default=64, help='Embedding dimensionality')
-    parser.add_argument('--memory_size', type=int, default=64, help='Memory size')
-    parser.add_argument('-k', '--keep_probability', type=float, default=0.85,
-                        help='Percentage of neurons to keep during dropout')
-    parser.add_argument('-m', '--momentum', type=float, default=0.5,
-                        help='Momentum (only used for Momentum optimizer)')
-    parser.add_argument('-o', '--optimizer', type=str, default='Adam',
-                        help='Optimizer class')
-    parser.add_argument('--schedule', type=str, default=None,
-                        help='Learning rate schedule. Format: "boundary1,...,boundaryN-1:lr1,...,lrN"')
-
-    args = parser.parse_args()
     helper.create_dictionaries(args.vocabulary_size, args.cutoff)
 
     if args.schedule:
@@ -302,19 +323,28 @@ def main():
     else:
         learning_rate = args.learning_rate
     opti_spec = OptimizerSpec(learning_rate=learning_rate, schedule=args.schedule,
-                              kind=args.optimizer, momentum=args.momentum)
+                              kind=args.optimizer, momentum=args.momentum, use_nesterov=True)
     print(f'Using optimizer {opti_spec}')
     batch_size = args.batch_size
-    epochs = args.epochs
+    epochs     = args.epochs
+    steps      = estimate_number_of_steps(helper._training_data, args.sequence_length, epochs,
+                                          batch_size)
+    print(f'Probable number of steps: {steps}')
 
     ################################################################################################
     #                                     Initialise the model                                     #
     ################################################################################################
     print('Creating model')
-    model = IMDBModel(vocab_size=args.vocabulary_size, subsequence_length=args.sequence_length,
-                    optimizer=opti_spec, embedding_size=args.embedding_size,
-                    memory_size=args.memory_size, keep_prob=args.keep_probability)
+    model = IMDBModel(vocab_size=args.vocabulary_size,
+                      subsequence_length=args.sequence_length,
+                      optimizer=opti_spec,
+                      embedding_size=args.embedding_size,
+                      memory_size=args.memory_size,
+                      keep_prob=args.keep_probability)
 
+    ################################################################################################
+    #                                       Run all the shit                                       #
+    ################################################################################################
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
@@ -335,15 +365,43 @@ def main():
                     ##############################
                     test_data, test_labels = helper._test_data, helper._test_labels
                     test_data = next(helper.slice_batch(test_data, args.sequence_length))
-                    accuracy = model.run_test_step(session, test_data, test_labels)
+                    accuracy  = model.run_test_step(session, test_data, test_labels)
                     print(f'Accuracy = {accuracy:3.3f}')
 
 def estimate_number_of_steps(train_data, sequence_length, epochs, batch_size):
+    '''Get an (incorrect, but close) estimate for the number of training steps. This is useful for
+    choosing a learning rate schedule.'''
+
     batches = int(train_data.shape[0] / batch_size + 0.5)
     max_len = np.max([len(sample) for sample in train_data])
-    steps = int(np.ceil(max_len / sequence_length)) * batches * epochs
-    print(f'Estimated number of steps: {steps}')
+    steps   = int(np.ceil(max_len / sequence_length)) * batches * epochs
+    return steps
 
+
+def get_arguments():
+    parser = ArgumentParser()
+    parser.add_argument('-v', '--vocabulary_size', type=int, default=20000)
+    parser.add_argument('-s', '--sequence_length', type=int,
+                        default=100, help='Length for subsequence training.')
+    parser.add_argument('-c', '--cutoff', type=int, default=300,
+                        help='Cutoff length for reviews.')
+    parser.add_argument('-b', '--batch_size', type=int, default=250, help='Batch size')
+    parser.add_argument('-e', '--epochs', type=int, default=2, help='Number of epochs')
+    parser.add_argument('-l', '--learning_rate', type=float, default=0.03,
+                        help='Initial learning rate (scheduling is used)')
+    parser.add_argument('--embedding_size', type=int, default=64, help='Embedding dimensionality')
+    parser.add_argument('--memory_size', type=int, default=64, help='Memory size')
+    parser.add_argument('-k', '--keep_probability', type=float, default=0.85,
+                        help='Percentage of neurons to keep during dropout')
+    parser.add_argument('-m', '--momentum', type=float, default=0.5,
+                        help='Momentum (only used for Momentum optimizer)')
+    parser.add_argument('-o', '--optimizer', type=str, default='Adam',
+                        help='Optimizer class')
+    parser.add_argument('--schedule', type=str, default=None,
+                        help='Learning rate schedule. Format: '
+                             '"boundary1,...,boundaryN-1:lr1,...,lrN"')
+
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
