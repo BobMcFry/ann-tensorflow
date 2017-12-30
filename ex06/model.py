@@ -42,8 +42,14 @@ class OptimizerSpec(dict):
         '''
         if not 'kind' in kwargs:
             raise ValueError('No optimizer name given')
-        self.parse_learning_rate(kwargs['learning_rate'])
+        if not 'learning_rate' in kwargs:
+            raise ValueError('No base learning_rate given')
         self.update(kwargs)
+        self.step_counter  = Variable(0, trainable=False, dtype=tf.int32, name='step_counter')
+        rate               = kwargs['learning_rate']
+        steps              = kwargs.get('steps', 100)
+        decay              = kwargs.get('decay', 0.8)
+        self.learning_rate = tf.train.exponential_decay(rate, self.step_counter, steps, decay)
 
     def create(self):
         '''Build the Optimizer object from the properties
@@ -74,31 +80,6 @@ class OptimizerSpec(dict):
         else:
             return optimizer_cls(learning_rate, name=name)
 
-    def parse_learning_rate(self, rate):
-        '''Create a tf.piecewise_constant learning rate scheduling from a string. Set this learning
-        rate and step counter as object attributes.
-
-        Parameters
-        ----------
-        rate    :   str
-                    Either a string that can be parsed into a float, or of the format
-                    "b1,...,bn-1:l1,...,ln" where bi are the boundaries and li are the learning rate
-                    values for a piecewise constant learning rate
-        '''
-        try:
-            # try to parse as float
-            self.learning_rate = float(rate)
-            self.step_counter   = None
-            print('Using fixed learning rate...')
-        except ValueError:
-            # must be schedule string
-            print('Creating schedule...')
-            boundary_str, lr_str = rate.split(':')
-            boundaries           = [int(n) for n in boundary_str.split(',')]
-            lrs                  = [float(n) for n in lr_str.split(',')]
-            self.step_counter    = Variable(0, trainable=False, dtype=tf.int32, name='step_counter')
-            self.learning_rate   = tf.train.piecewise_constant(self.step_counter, boundaries, lrs,
-                                                               name='rate_schedule')
 
     def __str__(self):
         key_val_str = ', '.join(str(k) + '=' + str(v) for k, v in self.items())
@@ -172,7 +153,7 @@ class IMDBModel(object):
         self.hidden_state = placeholder(tf.float32, shape=(None, memory_size), name='hidden_state')
         self.cell_state   = placeholder(tf.float32, shape=(None, memory_size), name='cell_state')
 
-        self.lengths = sequence_length(self.word_ids)
+        lengths = sequence_lengths(self.word_ids)
 
         ############################################################################################
         #                                        Embedding                                         #
@@ -188,7 +169,7 @@ class IMDBModel(object):
         ############################################################################################
         #                                        LSTM layer                                        #
         ############################################################################################
-        cell = BasicLSTMCell(memory_size)
+        cell = BasicLSTMCell(memory_size, activation=tf.nn.tanh)
 
         # during inference, use entire ensemble
         keep_prob = cond(self.is_training, lambda: constant(keep_prob), lambda: constant(1.0))
@@ -201,7 +182,7 @@ class IMDBModel(object):
         # A dynamic rnn creates the graph on the fly, so it can deal with embeddings of different
         # lengths. We do not need to unstack the embedding tensor to get rows, instead we compute
         # the actual sequence lengths and pass that
-        outputs, self.state = nn.dynamic_rnn(cell, embeddings, sequence_length=self.lengths,
+        outputs, self.state = nn.dynamic_rnn(cell, embeddings, sequence_length=lengths,
                                              initial_state=state)
         # Recreate tensor from list
         outputs      = reshape(concat(outputs, 1), [-1, subsequence_length * memory_size])
@@ -210,18 +191,22 @@ class IMDBModel(object):
         ############################################################################################
         #                        Fully connected layer, loss, and training                         #
         ############################################################################################
-        ff1             = fully_connected(outputs, 2, with_activation=False, use_bias=True)
-        loss            = reduce_mean(
-                                nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
+        ff1  = fully_connected(outputs, 2, with_activation=False, use_bias=True)
+        loss = reduce_mean(nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
                                                                             logits=ff1))
-        if self.step_counter:
-            # we're on a rate schedule
-            self.train_step = optimizer.minimize(loss, global_step=self.step_counter)
-        else:
-            self.train_step = optimizer.minimize(loss)
+
+        # we're on a rate schedule
+        self.train_step = optimizer.minimize(loss, global_step=self.step_counter)
         self.predictions    = nn.softmax(ff1)
         correct_prediction  = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
         self.accuracy       = reduce_mean(cast(correct_prediction, tf.float32))
+
+        ############################################################################################
+        #                                    Create summaraies                                     #
+        ############################################################################################
+        with tf.variable_scope('summary'):
+            self.summary_loss = tf.summary.scalar('loss', loss)
+            self.summary_accuracy = tf.summary.scalar('accuracy', self.accuracy)
 
 
     def get_zero_state(self, session, batch_size):
@@ -258,12 +243,12 @@ class IMDBModel(object):
 
         Returns
         -------
-        LSTMStateTuple
-            New memory state
+        LSTMStateTuple, Tensor
+            New memory state and the summary tensor for the loss op
 
         '''
         # Get state of last step
-        _state, _, = session.run([self.state, self.train_step],
+        _state, _, summary_loss = session.run([self.state, self.train_step, self.summary_loss],
             feed_dict = {
                 self.word_ids:     subsequence_batch,
                 self.labels:       labels,
@@ -272,7 +257,7 @@ class IMDBModel(object):
                 self.batch_size:   subsequence_batch.shape[0],
                 self.is_training:  True
             })
-        return _state
+        return _state, summary_loss
 
     def run_test_step(self, session, subsequence_batch, labels):
         '''Run one test step.
@@ -288,13 +273,13 @@ class IMDBModel(object):
 
         Returns
         -------
-        float
-            Accuracy
+        float, Tensor
+            Accuracy and the summary tensor for the accuracy on the batch
 
         '''
         batch_size = subsequence_batch.shape[0]
         zero_state = self.get_zero_state(session, batch_size)
-        predictions, accuracy = session.run([self.predictions, self.accuracy],
+        predictions, accuracy, summary_accuracy= session.run([self.predictions, self.accuracy, self.summary_accuracy],
             feed_dict = {
                 self.word_ids:     subsequence_batch,
                 self.labels:       labels,
@@ -303,7 +288,7 @@ class IMDBModel(object):
                 self.batch_size:   batch_size,
                 self.is_training:  False
             })
-        return accuracy
+        return accuracy, summary_accuracy
 
 def main():
     ################################################################################################
@@ -318,12 +303,9 @@ def main():
     helper = IMDB('data')
     helper.create_dictionaries(args.vocabulary_size, args.cutoff)
 
-    if args.schedule:
-        learning_rate = args.schedule
-    else:
-        learning_rate = args.learning_rate
-    opti_spec = OptimizerSpec(learning_rate=learning_rate, schedule=args.schedule,
-                              kind=args.optimizer, momentum=args.momentum, use_nesterov=True)
+    opti_spec = OptimizerSpec(learning_rate=args.learning_rate, steps=args.decay_steps,
+                              decay=args.decay_rate, kind=args.optimizer, momentum=args.momentum,
+                              use_nesterov=True)
     print(f'Using optimizer {opti_spec}')
     batch_size = args.batch_size
     epochs     = args.epochs
@@ -342,11 +324,16 @@ def main():
                       memory_size=args.memory_size,
                       keep_prob=args.keep_probability)
 
+    summary_dir = './summary/train/'
+
     ################################################################################################
     #                                       Run all the shit                                       #
     ################################################################################################
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
+
+        counter = 1
+        train_writer = tf.summary.FileWriter(summary_dir, session.graph)
 
         for epoch in range(epochs):
             print(f'Starting epoch {epoch}')
@@ -357,15 +344,21 @@ def main():
 
                 for subsequence_batch in helper.slice_batch(batch, args.sequence_length):
                     # push one subsequenc of each batch member
-                    state = model.run_training_step(session, subsequence_batch, labels, state)
+                    state, summary_loss = model.run_training_step(session, subsequence_batch, labels, state)
+                    if counter % 10 == 0:
+                        train_writer.add_summary(summary_loss, counter)
+                    counter += 1
 
                 if batch_idx % 10 == 0:
                     ##############################
                     #  Test with all test data.  #
                     ##############################
-                    test_data, test_labels = helper._test_data, helper._test_labels
+                    samples_n = helper._test_labels.shape[0]
+                    random_indices = np.random.choice(samples_n, samples_n // 7, replace=False)
+                    test_data, test_labels = helper._test_data[random_indices], helper._test_labels[random_indices]
                     test_data = next(helper.slice_batch(test_data, args.sequence_length))
-                    accuracy  = model.run_test_step(session, test_data, test_labels)
+                    accuracy, summary_accuracy = model.run_test_step(session, test_data, test_labels)
+                    train_writer.add_summary(summary_accuracy, counter)
                     print(f'Accuracy = {accuracy:3.3f}')
 
 def estimate_number_of_steps(train_data, sequence_length, epochs, batch_size):
@@ -397,9 +390,10 @@ def get_arguments():
                         help='Momentum (only used for Momentum optimizer)')
     parser.add_argument('-o', '--optimizer', type=str, default='Adam',
                         help='Optimizer class')
-    parser.add_argument('--schedule', type=str, default=None,
-                        help='Learning rate schedule. Format: '
-                             '"boundary1,...,boundaryN-1:lr1,...,lrN"')
+    parser.add_argument('--decay_steps', type=int, default=100,
+                        help='Decay learning rate every n steps')
+    parser.add_argument('--decay_rate', type=float, default=0.8,
+                        help='Base decay value for exponential decay')
 
     return parser.parse_args()
 
