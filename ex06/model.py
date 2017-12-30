@@ -353,10 +353,11 @@ def main():
                     ##############################
                     #  Test with all test data.  #
                     ##############################
-                    samples_n = helper._test_labels.shape[0]
-                    random_indices = np.random.choice(samples_n, samples_n // 7, replace=False)
-                    test_data, test_labels = helper._test_data[random_indices], helper._test_labels[random_indices]
-                    test_data = next(helper.slice_batch(test_data, args.sequence_length))
+                    samples_n                  = helper._test_labels.shape[0]
+                    n                          = 5000
+                    random_indices             = np.random.choice(samples_n, n, replace=False)
+                    test_data, test_labels     = helper._test_data[random_indices], helper._test_labels[random_indices]
+                    test_data                  = next(helper.slice_batch(test_data, args.sequence_length))
                     accuracy, summary_accuracy = model.run_test_step(session, test_data, test_labels)
                     train_writer.add_summary(summary_accuracy, counter)
                     print(f'Accuracy = {accuracy:3.3f}')
@@ -386,7 +387,7 @@ def get_arguments():
     parser.add_argument('--memory_size', type=int, default=64, help='Memory size')
     parser.add_argument('-k', '--keep_probability', type=float, default=0.85,
                         help='Percentage of neurons to keep during dropout')
-    parser.add_argument('-m', '--momentum', type=float, default=0.5,
+    parser.add_argument('--momentum', type=float, default=0.5,
                         help='Momentum (only used for Momentum optimizer)')
     parser.add_argument('-o', '--optimizer', type=str, default='Adam',
                         help='Optimizer class')
