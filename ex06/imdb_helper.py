@@ -9,6 +9,7 @@ PICKLE_NAME = 'imdb_helper.pckl'
 class IMDB:
 
     def load(self):
+        '''Deserialise self from pickeld file.'''
         f = open(PICKLE_NAME, 'rb')
         tmp_dict = pickle.load(f)
         f.close()
@@ -16,6 +17,7 @@ class IMDB:
         self.__dict__.update(tmp_dict)
 
     def save(self):
+        '''Serialise self to pickeld file.'''
         f = open(PICKLE_NAME, 'wb')
         pickle.dump(self.__dict__, f, 2)
         f.close()

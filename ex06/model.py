@@ -13,14 +13,15 @@ from imdb_helper import IMDB
 
 
 class OptimizerSpec(dict):
-    '''Encapsulate all the info needed for creating any kind of optimizer.
+    '''Encapsulate all the info needed for creating any kind of optimizer. Learning rate scheduling
+    is fixed to exponential decay
 
     Attributes
     ----------
     step_counter    :   Variable
                         Counter to be passed to optimizer#minimize() so it gets incremented during
                         each update
-    learning_rate   :   float or tf.train.piecewise_constant
+    learning_rate   :   tf.train.piecewise_constant
                         Learning rate of the optimizer (for later retrieval)
 
     '''
@@ -31,8 +32,8 @@ class OptimizerSpec(dict):
         ----------
         kind    :   str
                     Name of the optimizer
-        learning_rate   :   str
-                            Float string or schedule spec
+        learning_rate   :   float
+                            Base learning rate used
         name    :   str
                     Optional name for the piecewise_constant operation
         momentum    :   float
@@ -125,9 +126,7 @@ class IMDBModel(object):
                         LSTM memory size
         keep_prob   :   Inverse of dropout percentage for embedding and LSTM
         subsequence_length  :   Length of the subsequences (all embeddings are padded to this length)
-        optimizer   :   str or tf.train.Optimizer
-                        Class name of the optimizer to use, or an optimizer object
-
+        optimizer   :   OptimizerSpec
         '''
         ############################################################################################
         #                                 Get all hyperparameters                                  #
@@ -143,7 +142,7 @@ class IMDBModel(object):
         self.step_counter  = optimizer_spec.step_counter
 
         ############################################################################################
-        #                                        Net embeddings                                    #
+        #                                        Net inputs                                        #
         ############################################################################################
         self.batch_size   = placeholder(tf.int32,   shape=[],                  name='batch_size')
         self.is_training  = placeholder(tf.bool,    shape=[],                  name='is_training')
@@ -182,6 +181,10 @@ class IMDBModel(object):
         # A dynamic rnn creates the graph on the fly, so it can deal with embeddings of different
         # lengths. We do not need to unstack the embedding tensor to get rows, instead we compute
         # the actual sequence lengths and pass that
+        # We are not sure how any of this works. Do we need to mask the cost function so the cell
+        # outputs for _NOT_A_WORD_ inputs are ignored? Is the final cell state really relevant if it
+        # was last updated with _NOT_A_WORD_ input? Does static_rnn absolve us of any of those
+        # issues?
         outputs, self.state = nn.dynamic_rnn(cell, embeddings, sequence_length=lengths,
                                              initial_state=state)
         # Recreate tensor from list
@@ -194,12 +197,10 @@ class IMDBModel(object):
         ff1  = fully_connected(outputs, 2, with_activation=False, use_bias=True)
         loss = reduce_mean(nn.sparse_softmax_cross_entropy_with_logits(labels=self.labels,
                                                                             logits=ff1))
-
-        # we're on a rate schedule
-        self.train_step = optimizer.minimize(loss, global_step=self.step_counter)
-        self.predictions    = nn.softmax(ff1)
-        correct_prediction  = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
-        self.accuracy       = reduce_mean(cast(correct_prediction, tf.float32))
+        self.train_step    = optimizer.minimize(loss, global_step=self.step_counter)
+        self.predictions   = nn.softmax(ff1)
+        correct_prediction = equal(cast(argmax(self.predictions, 1), tf.int32), self.labels)
+        self.accuracy      = reduce_mean(cast(correct_prediction, tf.float32))
 
         ############################################################################################
         #                                    Create summaraies                                     #
@@ -247,8 +248,7 @@ class IMDBModel(object):
             New memory state and the summary tensor for the loss op
 
         '''
-        # Get state of last step
-        _state, _, summary_loss = session.run([self.state, self.train_step, self.summary_loss],
+        state, _, summary_loss = session.run([self.state, self.train_step, self.summary_loss],
             feed_dict = {
                 self.word_ids:     subsequence_batch,
                 self.labels:       labels,
@@ -257,7 +257,7 @@ class IMDBModel(object):
                 self.batch_size:   subsequence_batch.shape[0],
                 self.is_training:  True
             })
-        return _state, summary_loss
+        return state, summary_loss
 
     def run_test_step(self, session, subsequence_batch, labels):
         '''Run one test step.
@@ -279,7 +279,7 @@ class IMDBModel(object):
         '''
         batch_size = subsequence_batch.shape[0]
         zero_state = self.get_zero_state(session, batch_size)
-        predictions, accuracy, summary_accuracy= session.run([self.predictions, self.accuracy, self.summary_accuracy],
+        predictions, accuracy, summary_accuracy = session.run([self.predictions, self.accuracy, self.summary_accuracy],
             feed_dict = {
                 self.word_ids:     subsequence_batch,
                 self.labels:       labels,
@@ -343,21 +343,24 @@ def main():
                 state = model.get_zero_state(session, batch_size)
 
                 for subsequence_batch in helper.slice_batch(batch, args.sequence_length):
-                    # push one subsequenc of each batch member
-                    state, summary_loss = model.run_training_step(session, subsequence_batch, labels, state)
+                    # push one subsequence of each batch member
+                    state, summary_loss = model.run_training_step(session, subsequence_batch,
+                                                                  labels, state)
                     if counter % 10 == 0:
                         train_writer.add_summary(summary_loss, counter)
                     counter += 1
 
                 if batch_idx % 10 == 0:
-                    ##############################
-                    #  Test with all test data.  #
-                    ##############################
+                    ###############################
+                    #  Test with 5000 test data.  #
+                    ###############################
                     samples_n                  = helper._test_labels.shape[0]
                     n                          = 5000
                     random_indices             = np.random.choice(samples_n, n, replace=False)
-                    test_data, test_labels     = helper._test_data[random_indices], helper._test_labels[random_indices]
-                    test_data                  = next(helper.slice_batch(test_data, args.sequence_length))
+                    test_data, test_labels     = (helper._test_data[random_indices],
+                                                  helper._test_labels[random_indices])
+                    test_data                  = next(helper.slice_batch(test_data,
+                                                                         args.sequence_length))
                     accuracy, summary_accuracy = model.run_test_step(session, test_data, test_labels)
                     train_writer.add_summary(summary_accuracy, counter)
                     print(f'Accuracy = {accuracy:3.3f}')
