@@ -11,6 +11,10 @@ import sys; sys.path.insert(0, '..')
 from util import get_weights_and_bias, get_optimizer, fully_connected
 from imdb_helper import IMDB
 
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+
 
 class OptimizerSpec(dict):
     '''Encapsulate all the info needed for creating any kind of optimizer. Learning rate scheduling
@@ -209,6 +213,9 @@ class IMDBModel(object):
             self.summary_loss = tf.summary.scalar('loss', loss)
             self.summary_accuracy = tf.summary.scalar('accuracy', self.accuracy)
 
+    def get_embeddings(self, session):
+        return session.run(self.embedding_matrix, feed_dict={self.batch_size: 0})
+
 
     def get_zero_state(self, session, batch_size):
         '''Retrieve the LSTM zero state.
@@ -226,7 +233,7 @@ class IMDBModel(object):
         LSTMStateTuple
             Tuple of zero tensors of shape [batch_size x memory_size]
         '''
-        return session.run(self.zero_state, feed_dict = {self.batch_size: batch_size})
+        return session.run(self.zero_state, feed_dict={self.batch_size: batch_size})
 
     def run_training_step(self, session, subsequence_batch, labels, state):
         '''Run one training step.
@@ -364,6 +371,31 @@ def main():
                     accuracy, summary_accuracy = model.run_test_step(session, test_data, test_labels)
                     train_writer.add_summary(summary_accuracy, counter)
                     print(f'Accuracy = {accuracy:3.3f}')
+
+        ############################################################################################
+        #                                    TSNE visualisation                                    #
+        ############################################################################################
+        components = 2
+        perplexity = 30.0
+        word_vecs = model.get_embeddings(session)
+        print('Computing TSNE...')
+        tsne = TSNE(n_components=components, perplexity=perplexity).fit_transform(word_vecs)
+        n_words = 50
+        word_ids = helper.ids2words(range(args.vocabulary_size)[:n_words])
+        rng = range(n_words)
+
+        fig, ax = plt.subplots(1, 1, figsize=(15, 15))
+        x = tsne[rng, 0]
+        y = tsne[rng, 1]
+        ax.plot(x, y, 'o')
+
+        for i, word in enumerate(word_ids):
+            ax.annotate(word, (x[i], y[i]))
+
+        print('...Finished.')
+        plt.show()
+
+
 
 def estimate_number_of_steps(train_data, sequence_length, epochs, batch_size):
     '''Get an (incorrect, but close) estimate for the number of training steps. This is useful for
