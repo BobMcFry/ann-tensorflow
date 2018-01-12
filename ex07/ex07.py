@@ -115,16 +115,26 @@ def main():
     parser.add_argument('-b', '--batch-size', type=int, default=1, help='Average over several episodes')
     parser.add_argument('-l', '--learning-rate', type=float, default=0.01, help='Learning rate for Adam')
     parser.add_argument('-g', '--gamma', type=float, default=0.95, help='Discount factor')
+    parser.add_argument('-p', '--plot', action='store_true', default=False, help='Display a dynamic plot.')
 
     args = parser.parse_args()
     env = gym.make('CartPole-v0')
-    env.spec.max_episode_steps = args.iterations
-    episodes               = args.episodes
-    render_step            = args.render_step
 
-    summed_gradient_buffer = []
+    env.spec.max_episode_steps = args.iterations
+    episodes                   = args.episodes
+    render_step                = args.render_step
+    summed_gradient_buffer     = []
+
+    if args.plot:
+        from matplotlib import pyplot as plt
+        fig = plt.figure()
+        axes = fig.add_subplot(111)
+        graph, = axes.plot([], [])
+        plt.ion()
+        plt.show()
 
     agent = Agent(args.learning_rate, steps=args.episodes // 5)
+
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
@@ -149,6 +159,14 @@ def main():
 
                 if done:
                     print(progress_string(len(reward_buffer), args.iterations))
+                    if args.plot:
+                        graph.set_xdata(np.append(graph.get_xdata(), episode * episodes + step_count))
+                        graph.set_ydata(np.append(graph.get_ydata(), len(reward_buffer)))
+                        axes.relim()
+                        axes.autoscale_view()
+                        plt.draw()
+                        plt.pause(0.01)
+
 
             ##################
             #  Episode done  #
