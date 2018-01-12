@@ -9,16 +9,21 @@ import numpy as np
 
 class Agent(object):
 
-    def __init__(self, learning_rate):
+    def __init__(self, learning_rate, **kwargs):
 
-        self.observations = tf.placeholder(tf.float32, shape=[1, 4], name='observations')
-        hidden_layer      = fully_connected(self.observations, 8, with_activation=True, activation=tf.nn.relu)
-        probability       = fully_connected(hidden_layer, 1, with_activation=True, activation=tf.nn.sigmoid)
-        complementary     = tf.subtract(1.0, probability)
-        output            = tf.concat([probability, complementary], 1, name='action_probabilities')
-        log_likelihoods   = tf.log(output)
-        self.action       = tf.multinomial(log_likelihoods, num_samples=1)[0][0]
-        log_likelihood    = log_likelihoods[:, tf.to_int32(self.action)]
+        step_counter       = tf.Variable(0, trainable=False, dtype=tf.int32, name='step_counter')
+        steps              = kwargs.get('steps', 100)
+        decay              = kwargs.get('decay', 0.8)
+        learning_rate      = tf.train.exponential_decay(learning_rate, step_counter, steps, decay)
+
+        self.observations  = tf.placeholder(tf.float32, shape=[1, 4], name='observations')
+        hidden_layer       = fully_connected(self.observations, 8, with_activation=True, activation=tf.nn.relu)
+        probability        = fully_connected(hidden_layer, 1, with_activation=True, activation=tf.nn.sigmoid)
+        complementary      = tf.subtract(1.0, probability)
+        output             = tf.concat([probability, complementary], 1, name='action_probabilities')
+        log_likelihoods    = tf.log(output)
+        self.action        = tf.multinomial(log_likelihoods, num_samples=1)[0][0]
+        log_likelihood     = log_likelihoods[:, tf.to_int32(self.action)]
 
         # Create optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -35,7 +40,7 @@ class Agent(object):
 
         # Apply gradients
         tvars = tf.trainable_variables()
-        self.training_step = optimizer.apply_gradients(zip(self.grad_placeholders, tvars))
+        self.training_step = optimizer.apply_gradients(zip(self.grad_placeholders, tvars), global_step=step_counter)
 
     def get_action(self, observation, session):
         '''Retrieve an action for a given set of observations.'''
@@ -107,6 +112,9 @@ def main():
     parser.add_argument('-e', '--episodes', type=int, help='Number of episodes')
     parser.add_argument('-i', '--iterations', type=int, help='Number of steps per episode')
     parser.add_argument('-r', '--render-step', type=int, default=20, help='Render frame every r steps')
+    parser.add_argument('-b', '--batch-size', type=int, default=1, help='Average over several episodes')
+    parser.add_argument('-l', '--learning-rate', type=float, default=0.01, help='Learning rate for Adam')
+    parser.add_argument('-g', '--gamma', type=float, default=0.95, help='Discount factor')
 
     args = parser.parse_args()
     env = gym.make('CartPole-v0')
@@ -116,12 +124,13 @@ def main():
 
     summed_gradient_buffer = []
 
-    agent = Agent(0.01)
+    agent = Agent(args.learning_rate, steps=args.episodes // 5)
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
         for episode in range(episodes):
             gradient_buffer = []
+            summed_gradient_buffer = []
             reward_buffer   = []
             observation     = env.reset()
             step_count      = 0
@@ -139,16 +148,18 @@ def main():
                 gradient_buffer.append(grads)
 
                 if done:
-                    print(progress_string(len(reward_buffer), args.iterations), end='\r')
+                    print(progress_string(len(reward_buffer), args.iterations))
 
             ##################
             #  Episode done  #
             ##################
-            rewards      = discounted_rewards(reward_buffer, 0.5)
+            rewards      = discounted_rewards(reward_buffer, args.gamma)
             gradients    = discounted_gradients(gradient_buffer, rewards)
             gradient_sum = np.sum(np.array(gradients), 0)
             summed_gradient_buffer.append(gradient_sum)
-            agent.train(gradient_sum, session)
+            if (episode + 1) % args.batch_size == 0:
+                for g in summed_gradient_buffer:
+                    agent.train(g, session)
 
 def progress_string(reward, iters, width=100):
     '''Create a fun bar to visualise learner performance'''
