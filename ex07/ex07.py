@@ -1,5 +1,6 @@
 import sys; sys.path.insert(0, '..')
 
+import argparse
 import gym
 from gym import wrappers
 from util import fully_connected
@@ -102,11 +103,17 @@ def discounted_gradients(grads, discounted_rewards):
 
 
 def main():
+    parser = argparse.ArgumentParser('Reinforcement-learning the cart pole task.')
+    parser.add_argument('-e', '--episodes', type=int, help='Number of episodes')
+    parser.add_argument('-i', '--iterations', type=int, help='Number of steps per episode')
+    parser.add_argument('-r', '--render-step', type=int, default=20, help='Render frame every r steps')
+
+    args = parser.parse_args()
     env = gym.make('CartPole-v0')
-    env.seed(0)
-    episodes               = 2000
-    iters                  = 200
-    render_step            = 100
+    env.spec.max_episode_steps = args.iterations
+    episodes               = args.episodes
+    render_step            = args.render_step
+
     summed_gradient_buffer = []
 
     agent = Agent(0.01)
@@ -117,30 +124,38 @@ def main():
             gradient_buffer = []
             reward_buffer   = []
             observation     = env.reset()
-            for i in range(iters):
+            step_count      = 0
+            done = False
+
+            while not done:
                 act, *grads = agent.get_action(observation, session)
 
-                if episode > 500:
-                    if episode * i % render_step == 0:
-                        env.render()
+                if episode * step_count % render_step == 0:
+                    env.render()
+                step_count += 1
 
                 observation, reward, done, info = env.step(act)
                 reward_buffer.append(reward)
                 gradient_buffer.append(grads)
 
                 if done:
-                    print(f'Episode finished after {i+1} timesteps')
-                    break
+                    print(progress_string(len(reward_buffer), args.iterations), end='\r')
 
             ##################
             #  Episode done  #
             ##################
-            # summed_gradient_buffer.append(np.sum(np.array(gradient_buffer, 0)))
-            rewards = discounted_rewards(reward_buffer, 0.5)
-            gradients = discounted_gradients(gradient_buffer, rewards)
+            rewards      = discounted_rewards(reward_buffer, 0.5)
+            gradients    = discounted_gradients(gradient_buffer, rewards)
             gradient_sum = np.sum(np.array(gradients), 0)
+            summed_gradient_buffer.append(gradient_sum)
             agent.train(gradient_sum, session)
 
+def progress_string(reward, iters, width=100):
+    '''Create a fun bar to visualise learner performance'''
+
+    done_bar = int(width * reward / iters) * '█'
+    spaces = (width - len(done_bar)) * ' '
+    return f'Cumulative reward: [{done_bar}{spaces}]'
 
 if __name__ == '__main__':
     main()
