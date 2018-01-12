@@ -126,8 +126,7 @@ def fully_connected(input, n_out, with_activation=False, activation=tf.nn.tanh,
     Returns
     -------
     tf.Variable
-            The variable representing the layer activation (tanh(input * Weights
-            + bias))
+            The variable representing the layer activation
     '''
     global fc_n
     fc_n += 1
