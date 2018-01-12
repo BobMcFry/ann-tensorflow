@@ -8,53 +8,109 @@ import tensorflow as tf
 import numpy as np
 
 class Agent(object):
+    '''Class for a reinforcement learner.
+
+    Attributes
+    ----------
+    observations    :   tf.placeholder
+                        Input port for currently observed environment. Shape is (1, 4)
+    gradients   :   list
+                    Negative gradients for the 4 trainable variables of the fully connected network
+    grad_placeholders   :   list
+                            `tf.placeholder`s for each of the trainable variables. Must be fed during
+                            `train()`
+    training_step   :   tf.op
+                        Gradient application operation
+    '''
 
     def __init__(self, learning_rate, **kwargs):
+        '''Respected kwargs are
 
+        Parameters
+        ----------
+        steps   :   int
+                    Decay learning rate according to `exponential_decay` every `steps` steps
+        decay   :   decay factor for `exponential_decay`
+        learning_rate   :   base learning rate for `exponential_decay`
+        '''
+
+        ######################################
+        #  Create the dynamic learning rate  #
+        ######################################
         step_counter       = tf.Variable(0, trainable=False, dtype=tf.int32, name='step_counter')
         steps              = kwargs.get('steps', 100)
         decay              = kwargs.get('decay', 0.8)
         learning_rate      = tf.train.exponential_decay(learning_rate, step_counter, steps, decay)
 
+        ############################################################################################
+        #                                    Define the network                                    #
+        ############################################################################################
         self.observations  = tf.placeholder(tf.float32, shape=[1, 4], name='observations')
-        hidden_layer       = fully_connected(self.observations, 8, with_activation=True, activation=tf.nn.relu)
-        probability        = fully_connected(hidden_layer, 1, with_activation=True, activation=tf.nn.sigmoid)
+        hidden_layer       = fully_connected(self.observations, 8, with_activation=True,
+                                             activation=tf.nn.relu)
+        probability        = fully_connected(hidden_layer, 1, with_activation=True,
+                                             activation=tf.nn.sigmoid)
         complementary      = tf.subtract(1.0, probability)
         output             = tf.concat([probability, complementary], 1, name='action_probabilities')
         log_likelihoods    = tf.log(output)
         self.action        = tf.multinomial(log_likelihoods, num_samples=1)[0][0]
         log_likelihood     = log_likelihoods[:, tf.to_int32(self.action)]
 
-        # Create optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        # Compute gradients, returns a list of gradient variable tuples
         grads_and_vars = optimizer.compute_gradients(log_likelihood)
-        # Extract gradients and inverse the sign of gradients
-        # (compute_gradients returns inverted gradients for minimization)
         self.gradients = [grad * -1 for (grad, _) in grads_and_vars]
 
-        # Create placeholders for modified gradients
+        # Gradients must be fed for training
         self.grad_placeholders = []
         for i, gradient in enumerate(self.gradients):
-            self.grad_placeholders.append(tf.placeholder(tf.float32, gradient.shape, name=f'gradient_{i}'))
+            self.grad_placeholders.append(tf.placeholder(tf.float32, gradient.shape,
+                                                         name=f'gradient_{i}'))
+        self.grad_dummies = [np.zeros(grad.shape) for grad in self.grad_placeholders]
 
-        # Apply gradients
         tvars = tf.trainable_variables()
-        self.training_step = optimizer.apply_gradients(zip(self.grad_placeholders, tvars), global_step=step_counter)
+        self.training_step = optimizer.apply_gradients(zip(self.grad_placeholders, tvars),
+                                                       global_step=step_counter)
+
 
     def get_action(self, observation, session):
-        '''Retrieve an action for a given set of observations.'''
+        '''Retrieve an action for a given set of observations.
+
+        Parameters
+        ----------
+        observation :   np.ndarray
+                        Array of shape (4,) or (1, 4), representing the current observation
+        session :   tf.Session
+                    Session to run ops in
+
+        Returns
+        -------
+        int
+            0 or 1, depending on the action the network recommends
+        '''
+        # ensure input has 2 dims
         if observation.ndim == 1:
             observation = observation[np.newaxis, :]
-        grad_dummies = [np.zeros(grad.shape) for grad in self.grad_placeholders]
+
         feed_dict = {self.observations: observation}
-        feed_dict.update({p: grad for (p, grad) in zip(self.grad_placeholders, grad_dummies)})
+        # we don't actually need the gradients
+        feed_dict.update({p: grad for (p, grad) in zip(self.grad_placeholders, self.grad_dummies)})
+
         return session.run([self.action] + self.gradients, feed_dict=feed_dict)
 
     def train(self, discounted_gradients, session):
-        '''Apply discounted gradients computed over one episode.'''
+        '''Apply discounted gradients computed over one episode.
+
+        Parameters
+        ----------
+        discounted_gradients    :   list
+                                    List of np.ndarrays with modified gradients for each of the 4
+                                    trainable variables
+        session :   tf.Session
+                    Session to run ops in
+        '''
         feed_dict = {self.observations: np.zeros((1, 4), np.float32)}
         feed_dict.update({p: grad for (p, grad) in zip(self.grad_placeholders, discounted_gradients)})
+
         session.run([self.training_step], feed_dict=feed_dict)
 
 
@@ -78,7 +134,8 @@ def discounted_rewards(rewards_per_time, discount_factor):
     # create vector with all elems set to factor and power it with [0,...,T-1]
     factors = np.power(np.full((T,), discount_factor, np.float32), np.arange(T))
     discounted_rewards = [np.dot(rewards_per_time[t:], factors[:T-t]) for t in range(T)]
-    discounted_rewards = (discounted_rewards - np.mean(discounted_rewards)) / np.std(discounted_rewards)
+    mu, std = np.mean(discounted_rewards), np.std(discounted_rewards)
+    discounted_rewards = ((discounted_rewards - mu) / std)
     return discounted_rewards
 
 
