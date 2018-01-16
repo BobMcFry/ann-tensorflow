@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-def feed_forward_layer(x, target_size, normalize = False, activation_function = None):
-
+def feed_forward_layer(x, target_size, is_training, normalize = False, activation_function = None):
     fan_in = int(x.shape[-1])
 
     if activation_function == tf.nn.relu:
@@ -16,13 +15,12 @@ def feed_forward_layer(x, target_size, normalize = False, activation_function = 
     activation = tf.matmul(x, weights) + biases
 
     if normalize:
-        activation = batch_norm(activation, [0])
+        activation = batch_norm(activation, [0], is_training)
 
     return activation_function(activation) if callable(activation_function) else activation
 
 
-def conv_layer(x, kernel_quantity, kernel_size, stride_size, normalize = False, activation_function = False):
-    print("Conv-Layer:" + str(x.shape))
+def conv_layer(x, kernel_quantity, kernel_size, stride_size, normalize = False, activation_function = None, is_training=False):
     depth = x.shape[-1]
     fan_in = int(x.shape[1] * x.shape[2])
 
@@ -38,13 +36,21 @@ def conv_layer(x, kernel_quantity, kernel_size, stride_size, normalize = False, 
     activation = tf.nn.conv2d(x, kernels, strides = [1, stride_size, stride_size, 1], padding = "SAME") + biases
 
     if normalize:
-        activation = batch_norm(activation, [0, 1, 2])
+        activation = batch_norm(activation, [0, 1, 2], is_training)
 
     return activation_function(activation) if callable(activation_function) else activation
 
 
-def back_conv_layer(x, target_shape, kernel_size, stride_size, normalize = False, activation_function = False):
-    pass
+def transposed_conv_layer(x, kernel_size, output_shape, stride_size, is_training, normalize = False, activation_function = False):
+    deconv_filter = tf.get_variable('deconv_filter', shape=kernel_size,
+                                        initializer=tf.random_normal_initializer(0.1))
+    deconv_bias = tf.get_variable('deconv_bias', shape=output_shape[-1])
+    deconv = tf.nn.conv2d_transpose(x, deconv_filter, output_shape, strides=stride_size,
+                                        padding='SAME')
+    if normalize:
+        deconv = batch_norm(deconv + deconv_bias, [0, 1, 2], is_training)
+
+    return activation_function(deconv) if callable(activation_function) else deconv
 
 
 def flatten(x):
@@ -64,7 +70,7 @@ def _batch_norm(x, pop_mean, pop_var, mean, var, offset, scale):
     with tf.control_dependencies([dependency_1, dependency_2]):
         return tf.nn.batch_normalization(x, mean, var, offset, scale, 1e-6)
 
-def batch_norm(x, axes):
+def batch_norm(x, axes, is_training):
     depth = x.shape[-1]
     mean, var = tf.nn.moments(x, axes = axes)
 
