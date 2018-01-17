@@ -63,8 +63,8 @@ class GAN:
         with tf.variable_scope('discriminator') as scope_dis:
             self.input_reals = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
             inputs           = tf.concat([self.gen_output, self.input_reals], 0)
-            labels           = tf.concat([tf.ones((batch_size, 1), tf.float32),
-                                          tf.zeros((batch_size, 1), tf.float32)], 0)
+            labels           = tf.concat([tf.zeros((batch_size, 1), tf.float32),
+                                          tf.ones((batch_size, 1), tf.float32)], 0)
             act_fn = tf.nn.leaky_relu
             with tf.variable_scope('layer1'):
                 conv1 = conv_layer(inputs, 8, 5, 2, activation_function=act_fn, normalize=False)
@@ -87,7 +87,7 @@ class GAN:
             self.loss_dis = tf.reduce_mean(entropy_dis)
 
             entropy_gen = tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.ones((batch_size, 1), tf.float32), logits=self.dis_output[batch_size:]
+                labels=tf.ones((batch_size, 1), tf.float32), logits=self.dis_output[:batch_size]
 
             )
             self.loss_gen       = tf.reduce_mean(entropy_gen)
@@ -104,7 +104,23 @@ class GAN:
         loss_dis, loss_gen, _, _ = session.run(fetches, feed_dict=feeds)
         return loss_dis, loss_gen
 
+    def generate_images(self, session, vectors):
+        fetches = self.gen_output
+        feeds = {self.input: vectors, self.is_training: False}
+        return session.run(fetches, feed_dict=feeds)
 
+
+def plot_images(imgs):
+    n, h, w, c = imgs.shape
+    cols = int(np.sqrt(n))
+    rows = int(n / cols + 0.5)
+    fig, axrr = plt.subplots(rows, cols)
+    for row in range(rows):
+        for col in range(cols):
+            index = row * rows + col
+            ax = axrr[index]
+            ax.imshow(imgs[index, :, :, 0], cmap='gray')
+    plt.show()
 
 def main():
     from mnist_gan_helper import MNIST_GAN
@@ -113,8 +129,8 @@ def main():
 
     mnist_helper = MNIST_GAN('data')
     epochs       = 2
-    batch_size   = 128
-    gan          = GAN(batch_size)
+    batch_size   = 32
+    gan          = GAN(batch_size, 0.001)
 
     losses_dis = []
     losses_gen = []
@@ -122,17 +138,23 @@ def main():
         session.run(tf.global_variables_initializer())
 
         for epoch in range(epochs):
+            print(f'Starting epoch {epoch}')
             for batch in mnist_helper.get_batch(batch_size):
                 z = np.random.uniform(-1, 1, size=(batch_size, 50))
                 loss_dis, loss_gen = gan.train_step(session, z, batch, True)
                 losses_dis.append(loss_dis)
                 losses_gen.append(loss_gen)
-                print(f'[{loss_dis}, {loss_gen}]')
+            imgs = gan.generate_images(session, np.random.uniform(-1, 1, size=(batch_size, 50)))
+            plot_images(imgs)
 
     fig = plt.figure()
     ax  = fig.add_subplot(111)
-    ax.plot(losses_dis)
-    ax.plot(losses_gen)
+    ax.set_title('Entropy of GAN')
+    ax.set_xlabel('Training step')
+    ax.set_ylabel('Sigmoid cross-entropy')
+    ax.plot(losses_dis, label='Discriminator')
+    ax.plot(losses_gen, label='Generator')
+    ax.legend()
     plt.show()
 
 if __name__ == "__main__":
