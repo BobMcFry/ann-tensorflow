@@ -4,6 +4,7 @@ from util import batch_norm_layer
 from mnist_gan_layers import feed_forward_layer, transposed_conv_layer, conv_layer
 from mnist_gan_helper import MNIST_GAN
 import numpy as np
+np.random.seed(1)
 from matplotlib import pyplot as plt
 
 
@@ -135,8 +136,8 @@ def plot_images(imgs):
 
 def main():
     mnist_helper = MNIST_GAN('data')
-    epochs       = 4
-    batch_size   = 32
+    epochs       = 5
+    batch_size   = 64
     gan          = GAN(batch_size)
 
     losses_dis = []
