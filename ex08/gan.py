@@ -2,6 +2,10 @@ import sys; sys.path.insert(0, '..')
 import tensorflow as tf
 from util import batch_norm_layer
 from mnist_gan_layers import feed_forward_layer, transposed_conv_layer, conv_layer
+from mnist_gan_helper import MNIST_GAN
+import numpy as np
+from matplotlib import pyplot as plt
+
 
 
 class GAN:
@@ -113,24 +117,27 @@ class GAN:
 def plot_images(imgs):
     n, h, w, c = imgs.shape
     cols = int(np.sqrt(n))
-    rows = int(n / cols + 0.5)
-    fig, axrr = plt.subplots(rows, cols)
-    for row in range(rows):
-        for col in range(cols):
-            index = row * rows + col
-            ax = axrr[index]
-            ax.imshow(imgs[index, :, :, 0], cmap='gray')
+    rows = int(n / cols) + 1
+    fig, axarr = plt.subplots(rows, cols)
+    for index in range(n):
+        row = index // cols
+        col = index % cols
+        ax = axarr[row][col]
+        ax.imshow(imgs[index, :, :, 0], cmap='gray')
+
+    # delete empty plots
+    for index in range(n, rows*cols):
+        row = index // cols
+        col = index % cols
+        fig.delaxes(axarr[row][col])
+
     plt.show()
 
 def main():
-    from mnist_gan_helper import MNIST_GAN
-    import numpy as np
-    from matplotlib import pyplot as plt
-
     mnist_helper = MNIST_GAN('data')
-    epochs       = 2
+    epochs       = 4
     batch_size   = 32
-    gan          = GAN(batch_size, 0.001)
+    gan          = GAN(batch_size)
 
     losses_dis = []
     losses_gen = []
@@ -138,14 +145,14 @@ def main():
         session.run(tf.global_variables_initializer())
 
         for epoch in range(epochs):
-            print(f'Starting epoch {epoch}')
+            print(f'Starting epoch {epoch+1}/{epochs}')
             for batch in mnist_helper.get_batch(batch_size):
                 z = np.random.uniform(-1, 1, size=(batch_size, 50))
                 loss_dis, loss_gen = gan.train_step(session, z, batch, True)
                 losses_dis.append(loss_dis)
                 losses_gen.append(loss_gen)
-            imgs = gan.generate_images(session, np.random.uniform(-1, 1, size=(batch_size, 50)))
-            plot_images(imgs)
+        imgs = gan.generate_images(session, np.random.uniform(-1, 1, size=(batch_size, 50)))
+        plot_images(imgs)
 
     fig = plt.figure()
     ax  = fig.add_subplot(111)
