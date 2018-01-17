@@ -4,7 +4,7 @@ from util import batch_norm_layer
 from mnist_gan_layers import feed_forward_layer, transposed_conv_layer, conv_layer
 from mnist_gan_helper import MNIST_GAN
 import numpy as np
-np.random.seed(1)
+np.random.seed(0)
 from matplotlib import pyplot as plt
 
 
@@ -119,7 +119,7 @@ def plot_images(imgs):
     n, h, w, c = imgs.shape
     cols = int(np.sqrt(n))
     rows = int(n / cols) + 1
-    fig, axarr = plt.subplots(rows, cols)
+    fig, axarr = plt.subplots(rows, cols, figsize=(20, 20))
     for index in range(n):
         row = index // cols
         col = index % cols
