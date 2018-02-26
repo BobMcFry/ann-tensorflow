@@ -128,8 +128,11 @@ class IMDBModel(object):
                                 Dimensionality of the embedding space
         memory_size :   int
                         LSTM memory size
-        keep_prob   :   Inverse of dropout percentage for embedding and LSTM
-        subsequence_length  :   Length of the subsequences (all embeddings are padded to this length)
+        keep_prob   :   float
+                        Inverse of dropout percentage for embedding and LSTM
+        subsequence_length  :   int
+                                Length of the subsequences (all embeddings are padded to this
+                                length)
         optimizer   :   OptimizerSpec
         '''
         ############################################################################################
@@ -180,7 +183,7 @@ class IMDBModel(object):
 
         # what's the difference to just creating a zero-filled tensor tuple?
         self.zero_state = cell.zero_state(self.batch_size, tf.float32)
-        state           = LSTMStateTuple(c=self.cell_state, h=self.hidden_state)
+        state           = LSTMStateTuple(h=self.cell_state, c=self.hidden_state)
 
         # A dynamic rnn creates the graph on the fly, so it can deal with embeddings of different
         # lengths. We do not need to unstack the embedding tensor to get rows, instead we compute
