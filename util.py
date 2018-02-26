@@ -54,9 +54,8 @@ conv_n = 0
 
 def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
         use_bias=True, padding='SAME'):
-    '''Create a convolutional layer with fixed activation function and variable
-    initialisation. The activation function is ``tf.nn.tanh`` and variables are
-    initialised from a truncated normal distribution with an stddev of 0.1
+    '''Create a convolutional layer with activation function and variable
+    initialisation.
 
     Parameters
     ----------
@@ -66,6 +65,10 @@ def conv_layer(input, kshape, strides=(1, 1, 1, 1), activation=tf.nn.tanh,
                 Shape of the kernel tensor
     strides :   tuple or list
                 Strides
+    activation  :   function
+                    Activation functioin
+    use_bias    :   bool
+    padding :   str
 
     Returns
     -------
